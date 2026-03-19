@@ -3,7 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'map_screen.dart'; // දැන් මෙය පාවිච්චි වන නිසා Warning එකක් එන්නේ නැත
+import 'map_screen.dart'; 
 import 'package:geolocator/geolocator.dart';
 import 'package:image/image.dart' as img;
 
@@ -33,7 +33,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   File? _selectedImage;
-  String _result = "No Analysis Yet";
+  String _result = "තවමත් විශ්ලේෂණය කර නැත";
   bool _isLoading = false;
   double? _lat;
   double? _lng;
@@ -68,7 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (image != null) {
       setState(() {
         _selectedImage = File(image.path);
-        _result = "Captured. Review and Analyze.";
+        _result = "පින්තූරය ලබාගත්තා. දැන් Analyze කරන්න.";
         _lat = null;
         _lng = null;
       });
@@ -80,17 +80,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() { 
       _isLoading = true; 
-      _result = "Processing Image & Analyzing..."; 
+      _result = "පින්තූරය පිරිසැකසුම් කරමින් විශ්ලේෂණය කරයි..."; 
     });
 
     try {
-      // --- පින්තූරය සැබෑ ලෙසම Crop කිරීමේ ක්‍රියාවලිය ---
+      // --- පින්තූරය Crop කිරීමේ ක්‍රියාවලිය ---
       final bytes = await _selectedImage!.readAsBytes();
       img.Image? originalImage = img.decodeImage(bytes);
 
       if (originalImage == null) throw Exception("Could not decode image");
 
-      // පටු සිරස් කොටසක් මැදින් කපා ගමු (Width 40% ට අඩු කරනවා)
       int cropWidth = (originalImage.width * 0.4).toInt(); 
       int cropHeight = originalImage.height; 
 
@@ -105,12 +104,13 @@ class _HomeScreenState extends State<HomeScreen> {
       final tempDir = Directory.systemTemp;
       final croppedFile = File('${tempDir.path}/temp_crop.jpg');
       await croppedFile.writeAsBytes(img.encodeJpg(croppedImage));
-      // ---------------------------------------
 
+      // ස්ථානය ලබා ගැනීම
       Position position = await _determinePosition();
       _lat = position.latitude;
       _lng = position.longitude;
       
+      // Backend URL (මෙහි IP එක පරීක්ෂා කරන්න)
       var uri = Uri.parse('http://192.168.8.163:5000/predict'); 
       var request = http.MultipartRequest('POST', uri);
       
@@ -123,13 +123,19 @@ class _HomeScreenState extends State<HomeScreen> {
       var decodedData = json.decode(responseData);
 
       setState(() {
-        if (decodedData['is_rice'] == true) {
-          _result = "Status: ${decodedData['prediction']}\n"
-                    "Confidence: ${(decodedData['confidence'] * 100).toStringAsFixed(2)}%\n"
-                    "Solution: ${decodedData['solution']}";
-        } else {
+        // --- Status අනුව UI එක වෙනස් කිරීම ---
+        if (decodedData['status'] == 'success') {
+          _result = "තත්ත්වය: ${decodedData['prediction']}\n"
+                    "විශ්වාසනීයත්වය: ${(decodedData['confidence'] * 100).toStringAsFixed(2)}%\n"
+                    "විසඳුම: ${decodedData['solution']}";
+        } else if (decodedData['status'] == 'unclear') {
           _lat = null; _lng = null;
-          _result = "Message: ${decodedData['message']}";
+          _result = "⚠️ අපැහැදිලියි: ${decodedData['message']}";
+        } else if (decodedData['status'] == 'invalid') {
+          _lat = null; _lng = null;
+          _result = "❌ වැරදියි: ${decodedData['message']}";
+        } else {
+          _result = "Error: ${decodedData['error'] ?? 'Unknown Error'}";
         }
       });
     } catch (e) {
@@ -144,7 +150,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Rice Leaf Analyzer"),
+        centerTitle: true,
         backgroundColor: Colors.green[700],
+        foregroundColor: Colors.white,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -154,57 +162,69 @@ class _HomeScreenState extends State<HomeScreen> {
               
               Center(
                 child: Container(
-                  width: 200, 
-                  height: 400, 
+                  width: 220, 
+                  height: 420, 
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.green, width: 3),
-                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.green, width: 4),
+                    borderRadius: BorderRadius.circular(20),
                     color: Colors.black12,
+                    boxShadow: [
+                      BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 2)
+                    ]
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                     child: _selectedImage == null
-                        ? const Center(child: Icon(Icons.camera_alt, size: 50, color: Colors.grey))
+                        ? const Center(child: Icon(Icons.camera_alt, size: 60, color: Colors.grey))
                         : Image.file(_selectedImage!, fit: BoxFit.cover),
                   ),
                 ),
               ),
               
-              const SizedBox(height: 10),
+              const SizedBox(height: 15),
 
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 40),
                 child: Column(
                   children: [
-                    Row(children: [Icon(Icons.check_circle, color: Colors.green, size: 14), SizedBox(width: 8), Text("දුරකථනය සිරස් අතට අල්ලන්න", style: TextStyle(fontSize: 12))]),
-                    Row(children: [Icon(Icons.check_circle, color: Colors.green, size: 14), SizedBox(width: 8), Text("පත්‍රය කොටුව මැදට ගන්න", style: TextStyle(fontSize: 12))]),
+                    Row(children: [Icon(Icons.check_circle, color: Colors.green, size: 16), SizedBox(width: 10), Text("දුරකථනය සිරස් අතට අල්ලන්න", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500))]),
+                    SizedBox(height: 5),
+                    Row(children: [Icon(Icons.check_circle, color: Colors.green, size: 16), SizedBox(width: 10), Text("පත්‍රය කොටුව මැදට ගන්න", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500))]),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 15),
+              const SizedBox(height: 20),
               
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 25),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(15),
                   decoration: BoxDecoration(
-                    color: Colors.grey[200],
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.grey[300]!),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black12, blurRadius: 5)
+                    ]
                   ),
                   child: Text(
                     _result,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 14, 
+                      fontWeight: FontWeight.bold,
+                      color: _result.contains('❌') ? Colors.red : (_result.contains('⚠️') ? Colors.orange[800] : Colors.black87)
+                    ),
                   ),
                 ),
               ),
               
-              const SizedBox(height: 15),
+              const SizedBox(height: 20),
               
               _isLoading 
-                ? const CircularProgressIndicator() 
+                ? const CircularProgressIndicator(color: Colors.green) 
                 : Column(
                     children: [
                       ElevatedButton.icon(
@@ -214,11 +234,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blueAccent,
                           foregroundColor: Colors.white,
-                          minimumSize: const Size(240, 45),
+                          minimumSize: const Size(260, 50),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 15),
                       if (_selectedImage != null)
                         ElevatedButton.icon(
                           onPressed: _uploadImage,
@@ -227,15 +247,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green[600], 
                             foregroundColor: Colors.white,
-                            minimumSize: const Size(240, 45),
+                            minimumSize: const Size(260, 50),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))
                           ),
                         ),
                       
-                      // --- Map Button එක ආපසු එකතු කළා ---
                       if (_lat != null && _lng != null)
                         Padding(
-                          padding: const EdgeInsets.only(top: 12),
+                          padding: const EdgeInsets.only(top: 15),
                           child: ElevatedButton.icon(
                             onPressed: () {
                               Navigator.push(
@@ -252,14 +271,14 @@ class _HomeScreenState extends State<HomeScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.orange[700], 
                               foregroundColor: Colors.white,
-                              minimumSize: const Size(240, 45),
+                              minimumSize: const Size(260, 50),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))
                             ),
                           ),
                         ),
                     ],
                   ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 40),
             ],
           ),
         ),

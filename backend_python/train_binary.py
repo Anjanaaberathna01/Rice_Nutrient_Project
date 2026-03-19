@@ -79,7 +79,7 @@ print("Training started...")
 history = model.fit(
     train_generator,
     validation_data=val_generator,
-    epochs=15,
+    epochs=1,
     class_weight=class_weights,
     callbacks=[early_stop]
 )
@@ -97,7 +97,7 @@ model.compile(optimizer=tf.keras.optimizers.Adam(1e-5),
 history_fine = model.fit(
     train_generator,
     validation_data=val_generator,
-    epochs=10,
+    epochs=1,
     class_weight=class_weights,
     callbacks=[early_stop]
 )
