@@ -1,138 +1,134 @@
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator # type: ignore
 from tensorflow.keras.applications import MobileNetV2 # type: ignore
-from tensorflow.keras import layers, models # type: ignore
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input # type: ignore
+from tensorflow.keras import layers, models, optimizers # type: ignore
 import pandas as pd
-import cv2 # type: ignore
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import confusion_matrix, classification_report
 import os
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
 from sklearn.utils import class_weight
+from sklearn.metrics import confusion_matrix, classification_report
 
-# 1. පින්තූර RGB සිට HSV වලට හැරවීමේ ශ්‍රිතය
-def convert_to_hsv(image):
-    image_hsv = cv2.cvtColor(image.astype('uint8'), cv2.COLOR_RGB2HSV)
-    return image_hsv.astype('float32') / 255.0 # Normalization
-
-# 2. දත්ත සහ පරාමිතීන්
+# 1. පරාමිතීන් (Parameters)
 IMG_SIZE = (224, 224)
 BATCH_SIZE = 32
-df = pd.read_csv('multi_label_metadata.csv')
+METADATA_CSV = 'multi_label_metadata.csv'
 
-# 3. Data Augmentation
+# 2. Data Augmentation (N, P, K වලට විශේෂ අවධානයක් දීමට Brightness/Zoom වැඩි කළා)
 datagen = ImageDataGenerator(
-    rescale=None, # preprocessing_function එකෙන් අපි මේක කරනවා
-    preprocessing_function=convert_to_hsv,
+    preprocessing_function=preprocess_input,
+    rotation_range=40,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.3,
+    brightness_range=[0.7, 1.3], 
+    horizontal_flip=True,
+    fill_mode='nearest',
     validation_split=0.2
 )
 
-# 4. Generators සකස් කිරීම
+df = pd.read_csv(METADATA_CSV)
+classes = sorted(df['label'].unique())
+
 train_gen = datagen.flow_from_dataframe(
-    df,
-    directory='dataset/multi_label_classifier',
-    x_col='image_path',
-    y_col='label',
-    target_size=IMG_SIZE,
-    batch_size=BATCH_SIZE,
-    class_mode='categorical',
-    subset='training'
+    df, directory='dataset/multi_label_classifier', x_col='image_path', y_col='label',
+    target_size=IMG_SIZE, batch_size=BATCH_SIZE, class_mode='categorical',
+    subset='training', shuffle=True
 )
 
 val_gen = datagen.flow_from_dataframe(
-    df,
-    directory='dataset/multi_label_classifier',
-    x_col='image_path',
-    y_col='label',
-    target_size=IMG_SIZE,
-    batch_size=BATCH_SIZE,
-    class_mode='categorical',
-    subset='validation',
-    shuffle=False
+    df, directory='dataset/multi_label_classifier', x_col='image_path', y_col='label',
+    target_size=IMG_SIZE, batch_size=BATCH_SIZE, class_mode='categorical',
+    subset='validation', shuffle=False
 )
 
-# 5. Class Weights ගණනය කිරීම (Imbalance එක විසඳීමට)
+# 3. Class Weights (N,P,K පන්තිවලට මොඩලය තුළ වැඩි බරක් ලබා දීම)
 labels = train_gen.classes
 weights = class_weight.compute_class_weight('balanced', classes=np.unique(labels), y=labels)
 class_weights = dict(enumerate(weights))
 
-# 6. Model එක ගොඩනැගීම (MobileNetV2)
+# 4. Model Building with Attention (Squeeze-and-Excitation Layer)
 base_model = MobileNetV2(input_shape=(224, 224, 3), include_top=False, weights='imagenet')
-base_model.trainable = False
+base_model.trainable = False 
 
-model = models.Sequential([
-    base_model,
-    layers.GlobalAveragePooling2D(),
-    layers.Dense(4, activation='softmax') # Healthy, N, P, K classes 4 සඳහා
-])
+inputs = layers.Input(shape=(224, 224, 3))
+x = base_model(inputs)
+x = layers.GlobalAveragePooling2D()(x)
 
-model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+# --- Attention Block: මෙය පත්‍රයේ සියුම් වර්ණ සහ දාරවල ලක්ෂණ වැඩි දියුණු කරයි ---
+se = layers.Dense(x.shape[-1] // 16, activation='relu')(x)
+se = layers.Dense(x.shape[-1], activation='sigmoid')(se)
+x = layers.Multiply()([x, se])
 
-# 7. Training ආරම්භ කිරීම
-print("Multi-label Training Started...")
-history = model.fit(
-    train_gen,
-    validation_data=val_gen,
-    epochs=10,
-    class_weight=class_weights
-)
+x = layers.BatchNormalization()(x)
+x = layers.Dense(512, activation='relu')(x)
+x = layers.Dropout(0.5)(x)
+outputs = layers.Dense(len(classes), activation='softmax')(x)
 
-# 8. Model එක සේව් කිරීම
-if not os.path.exists('models'): os.makedirs('models')
-model.save('models/rice_multilabel_model.h5')
-print("Multi-label Model Saved Successfully!")
+model = models.Model(inputs, outputs)
 
-# --- EVALUATION & GRAPH GENERATION FOR MULTI-LABEL ---
+# 5. Training Phase 1: Warming up Top Layers
+model.compile(optimizer=optimizers.Adam(learning_rate=1e-3), 
+              loss='categorical_crossentropy', metrics=['accuracy'])
 
-# 1. පියවර: Accuracy සහ Loss Graphs ඇඳීම
-acc = history.history['accuracy']
-val_acc = history.history['val_accuracy']
-loss = history.history['loss']
-val_loss = history.history['val_loss']
-epochs_range = range(1, len(acc) + 1)
+print("\n--- Phase 1: Training Top Layers ---")
+history1 = model.fit(train_gen, validation_data=val_gen, epochs=10, class_weight=class_weights)
 
-plt.figure(figsize=(12, 5))
-plt.subplot(1, 2, 1)
-plt.plot(epochs_range, acc, label='Training Accuracy')
-plt.plot(epochs_range, val_acc, label='Validation Accuracy')
-plt.title('Multi-label Model Accuracy')
-plt.legend()
+# 6. Training Phase 2: Fine-Tuning (පද්ධතියේ ගැඹුර වැඩි කිරීම)
+base_model.trainable = True
+for layer in base_model.layers[:-60]: layer.trainable = False
 
-plt.subplot(1, 2, 2)
-plt.plot(epochs_range, loss, label='Training Loss')
-plt.plot(epochs_range, val_loss, label='Validation Loss')
-plt.title('Multi-label Model Loss')
-plt.legend()
+# Learning Rate එක ස්වයංක්‍රීයව අඩු කරන Callback එක (Precision සඳහා)
+lr_callback = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=1e-7)
 
-# Graphs සේව් කිරීම
-if not os.path.exists('reports'): os.makedirs('reports')
-plt.savefig('reports/multilabel_learning_curves.png')
-plt.show()
+model.compile(optimizer=optimizers.Adam(learning_rate=1e-5), 
+              loss='categorical_crossentropy', metrics=['accuracy'])
 
-# 2. පියවර: Confusion Matrix එක සෑදීම
-print("\nGenerating Multi-class Confusion Matrix...")
-val_gen.reset()
-Y_pred = model.predict(val_gen)
-y_pred = np.argmax(Y_pred, axis=1) # වැඩිම සම්භාවිතාව ඇති Class එක තෝරා ගැනීම
+print("\n--- Phase 2: Fine-Tuning for N,P,K Precision ---")
+history2 = model.fit(train_gen, validation_data=val_gen, epochs=20, 
+                     class_weight=class_weights, callbacks=[lr_callback])
 
-# Class names ලබා ගැනීම
-class_labels = list(val_gen.class_indices.keys())
+# 7. Saving the Model
+model_path = 'models/rice_multilabel_model_v3.h5'
+model.save(model_path)
+print(f"✅ Advanced Model Saved as '{model_path}'")
 
-cm = confusion_matrix(val_gen.classes, y_pred)
+# 8. Visualizing Results (For Thesis/Report)
 
-plt.figure(figsize=(8, 6))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Greens', 
-            xticklabels=class_labels, 
-            yticklabels=class_labels)
-plt.title('Confusion Matrix - NPK Diagnosis')
-plt.ylabel('Actual Category')
-plt.xlabel('Predicted Category')
+# Learning Curves
+def plot_history(h1, h2):
+    acc = h1.history['accuracy'] + h2.history['accuracy']
+    val_acc = h1.history['val_accuracy'] + h2.history['val_accuracy']
+    loss = h1.history['loss'] + h2.history['loss']
+    val_loss = h1.history['val_loss'] + h2.history['val_loss']
+    
+    plt.figure(figsize=(12, 4))
+    plt.subplot(1, 2, 1)
+    plt.plot(acc, label='Train Accuracy')
+    plt.plot(val_acc, label='Val Accuracy')
+    plt.legend(); plt.title('Accuracy')
+    
+    plt.subplot(1, 2, 2)
+    plt.plot(loss, label='Train Loss')
+    plt.plot(val_loss, label='Val Loss')
+    plt.legend(); plt.title('Loss')
+    plt.show()
 
-# Matrix එක සේව් කිරීම
-plt.savefig('reports/multilabel_confusion_matrix.png')
-plt.show()
+# Confusion Matrix
+def show_confusion_matrix(model, val_gen):
+    val_gen.reset()
+    y_pred = np.argmax(model.predict(val_gen), axis=1)
+    y_true = val_gen.classes
+    cm = confusion_matrix(y_true, y_pred)
+    
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Greens', xticklabels=classes, yticklabels=classes)
+    plt.xlabel('Predicted'); plt.ylabel('Actual'); plt.title('Confusion Matrix')
+    plt.show()
+    print(classification_report(y_true, y_pred, target_names=classes))
 
-# 3. පියවර: පර්යේෂණ වාර්තාවට අවශ්‍ය නිරවද්‍යතා දත්ත (Precision/Recall)
-print("\nMulti-label Classification Report:")
-print(classification_report(val_gen.classes, y_pred, target_names=class_labels))
+plot_history(history1, history2)
+show_confusion_matrix(model, val_gen)
