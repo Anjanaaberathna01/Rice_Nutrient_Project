@@ -18,7 +18,7 @@ class RiceApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.green),
+      theme: ThemeData(primarySwatch: Colors.green, useMaterial3: true),
       home: const HomeScreen(),
     );
   }
@@ -34,43 +34,34 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   File? _selectedImage;
   String _result = "තවමත් විශ්ලේෂණය කර නැත";
+  String? _heatmapBase64; 
   bool _isLoading = false;
   double? _lat;
   double? _lng;
 
+  // ස්ථානය ලබා ගැනීම
   Future<Position> _determinePosition() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return Future.error('Location services are disabled.');
 
-    permission = await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return Future.error('Location permissions are denied');
     }
-    
-    if (permission == LocationPermission.deniedForever) return Future.error('Location permissions are permanently denied.');
-
-    return await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high)
-    );
+    return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
   }
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 100, 
-    );
+    final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 100);
 
     if (image != null) {
       setState(() {
         _selectedImage = File(image.path);
         _result = "පින්තූරය ලබාගත්තා. දැන් Analyze කරන්න.";
-        _lat = null;
-        _lng = null;
+        _heatmapBase64 = null;
+        _lat = null; _lng = null;
       });
     }
   }
@@ -84,36 +75,27 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      // --- පින්තූරය Crop කිරීමේ ක්‍රියාවලිය ---
       final bytes = await _selectedImage!.readAsBytes();
       img.Image? originalImage = img.decodeImage(bytes);
-
       if (originalImage == null) throw Exception("Could not decode image");
 
       int cropWidth = (originalImage.width * 0.4).toInt(); 
-      int cropHeight = originalImage.height; 
-
       img.Image croppedImage = img.copyCrop(
         originalImage, 
-        x: (originalImage.width - cropWidth) ~/ 2,
-        y: 0, 
-        width: cropWidth, 
-        height: cropHeight
+        x: (originalImage.width - cropWidth) ~/ 2, y: 0, 
+        width: cropWidth, height: originalImage.height
       );
 
       final tempDir = Directory.systemTemp;
       final croppedFile = File('${tempDir.path}/temp_crop.jpg');
       await croppedFile.writeAsBytes(img.encodeJpg(croppedImage));
 
-      // ස්ථානය ලබා ගැනීම
       Position position = await _determinePosition();
       _lat = position.latitude;
       _lng = position.longitude;
       
-      // Backend URL (මෙහි IP එක පරීක්ෂා කරන්න)
       var uri = Uri.parse('http://192.168.8.163:5000/predict'); 
       var request = http.MultipartRequest('POST', uri);
-      
       request.files.add(await http.MultipartFile.fromPath('image', croppedFile.path));
       request.fields['lat'] = _lat.toString();
       request.fields['lng'] = _lng.toString();
@@ -123,164 +105,128 @@ class _HomeScreenState extends State<HomeScreen> {
       var decodedData = json.decode(responseData);
 
       setState(() {
-        // --- Status අනුව UI එක වෙනස් කිරීම ---
         if (decodedData['status'] == 'success') {
-          _result = "තත්ත්වය: ${decodedData['prediction']}\n"
-                    "විශ්වාසනීයත්වය: ${(decodedData['confidence'] * 100).toStringAsFixed(2)}%\n"
-                    "විසඳුම: ${decodedData['solution']}";
-        } else if (decodedData['status'] == 'unclear') {
-          _lat = null; _lng = null;
-          _result = "⚠️ අපැහැදිලියි: ${decodedData['message']}";
-        } else if (decodedData['status'] == 'invalid') {
-          _lat = null; _lng = null;
-          _result = "❌ වැරදියි: ${decodedData['message']}";
+          // අගයන් ප්‍රතිශතයන් ලෙස ලබා ගැනීම
+          double dis = (decodedData['disease_score'] ?? 0.0) * 100;
+          double def = (decodedData['deficiency_score'] ?? 0.0) * 100;
+
+          _result = "විශ්ලේෂණය:\n"
+                    "රෝග ලක්ෂණ: ${dis.toStringAsFixed(0)}% | ඌණතා: ${def.toStringAsFixed(0)}%\n"
+                    "----------------------------------\n"
+                    "ප්‍රධාන නිගමනය: ${decodedData['prediction']}\n"
+                    "විශ්වාසනීයත්වය: ${(decodedData['confidence'] * 100).toStringAsFixed(2)}%\n\n"
+                    "සටහන: ${decodedData['message']}";
+          
+          _heatmapBase64 = decodedData['heatmap'];
+          if (_heatmapBase64 != null) _showHeatmapDialog();
+          
         } else {
-          _result = "Error: ${decodedData['error'] ?? 'Unknown Error'}";
+          _result = "දෝෂයකි: ${decodedData['message']}";
         }
       });
     } catch (e) {
-      setState(() { _result = "Error: $e"; });
+      setState(() { _result = "සම්බන්ධතා දෝෂයකි: $e"; });
     } finally {
       setState(() { _isLoading = false; });
     }
   }
 
+  void _showHeatmapDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Ensemble Attention Map", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("මොඩලය පත්‍රයේ අවධානය යොමු කළ ස්ථාන මෙහි වර්ණ ගැන්වී පෙන්වයි.", style: TextStyle(fontSize: 12), textAlign: TextAlign.center),
+              const SizedBox(height: 15),
+              _heatmapBase64 != null
+                  ? Container(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height * 0.5,
+                        maxWidth: MediaQuery.of(context).size.width * 0.8,
+                      ),
+                      decoration: BoxDecoration(border: Border.all(color: Colors.green.withOpacity(0.5)), borderRadius: BorderRadius.circular(8)),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(base64Decode(_heatmapBase64!), fit: BoxFit.contain),
+                      ),
+                    )
+                  : const Text("Heatmap ලබා ගත නොහැක"),
+            ],
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))],
+      ),
+    );
+  }
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Rice Leaf Analyzer"),
-        centerTitle: true,
+        title: const Text("Rice Nutrient & Disease Analyzer"),
         backgroundColor: Colors.green[700],
         foregroundColor: Colors.white,
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              const SizedBox(height: 15),
-              
-              Center(
-                child: Container(
-                  width: 220, 
-                  height: 420, 
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.green, width: 4),
-                    borderRadius: BorderRadius.circular(20),
-                    color: Colors.black12,
-                    boxShadow: [
-                      BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 2)
-                    ]
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: _selectedImage == null
-                        ? const Center(child: Icon(Icons.camera_alt, size: 60, color: Colors.grey))
-                        : Image.file(_selectedImage!, fit: BoxFit.cover),
-                  ),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            Center(
+              child: Container(
+                width: 220, height: 400,
+                decoration: BoxDecoration(border: Border.all(color: Colors.green, width: 3), borderRadius: BorderRadius.circular(15)),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: _selectedImage == null
+                      ? const Icon(Icons.center_focus_weak, size: 50, color: Colors.grey)
+                      : Image.file(_selectedImage!, fit: BoxFit.cover),
                 ),
               ),
-              
-              const SizedBox(height: 15),
-
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 40),
-                child: Column(
+            ),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text(_result, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.5)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            _isLoading 
+              ? const CircularProgressIndicator(color: Colors.green)
+              : Column(
                   children: [
-                    Row(children: [Icon(Icons.check_circle, color: Colors.green, size: 16), SizedBox(width: 10), Text("දුරකථනය සිරස් අතට අල්ලන්න", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500))]),
-                    SizedBox(height: 5),
-                    Row(children: [Icon(Icons.check_circle, color: Colors.green, size: 16), SizedBox(width: 10), Text("පත්‍රය කොටුව මැදට ගන්න", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500))]),
+                    ElevatedButton.icon(
+                      onPressed: _pickImage,
+                      icon: const Icon(Icons.camera_alt),
+                      label: const Text("Capture Leaf"),
+                      style: ElevatedButton.styleFrom(minimumSize: const Size(260, 50), backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_selectedImage != null)
+                      ElevatedButton.icon(
+                        onPressed: _uploadImage,
+                        icon: const Icon(Icons.analytics_outlined),
+                        label: const Text("Analyze Now"),
+                        style: ElevatedButton.styleFrom(minimumSize: const Size(260, 50), backgroundColor: Colors.green[600], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))),
+                      ),
+                    if (_heatmapBase64 != null)
+                       Padding(
+                         padding: const EdgeInsets.only(top: 10),
+                         child: TextButton.icon(onPressed: _showHeatmapDialog, icon: const Icon(Icons.remove_red_eye_outlined), label: const Text("View Heatmap")),
+                       ),
                   ],
                 ),
-              ),
-
-              const SizedBox(height: 20),
-              
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 25),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(15),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.grey[300]!),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black12, blurRadius: 5)
-                    ]
-                  ),
-                  child: Text(
-                    _result,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14, 
-                      fontWeight: FontWeight.bold,
-                      color: _result.contains('❌') ? Colors.red : (_result.contains('⚠️') ? Colors.orange[800] : Colors.black87)
-                    ),
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 20),
-              
-              _isLoading 
-                ? const CircularProgressIndicator(color: Colors.green) 
-                : Column(
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: _pickImage,
-                        icon: const Icon(Icons.camera_alt),
-                        label: const Text("Capture Leaf Photo"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(260, 50),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))
-                        ),
-                      ),
-                      const SizedBox(height: 15),
-                      if (_selectedImage != null)
-                        ElevatedButton.icon(
-                          onPressed: _uploadImage,
-                          icon: const Icon(Icons.search),
-                          label: const Text("Analyze Leaf"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green[600], 
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size(260, 50),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))
-                          ),
-                        ),
-                      
-                      if (_lat != null && _lng != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 15),
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => MapScreen(
-                                    lat: _lat!, lng: _lng!, status: _result,
-                                  ),
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.map),
-                            label: const Text("View on Map"),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange[700], 
-                              foregroundColor: Colors.white,
-                              minimumSize: const Size(260, 50),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-              const SizedBox(height: 40),
-            ],
-          ),
+            const SizedBox(height: 30),
+          ],
         ),
       ),
     );
