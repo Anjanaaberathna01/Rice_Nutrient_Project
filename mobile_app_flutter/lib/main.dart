@@ -3,9 +3,9 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'map_screen.dart'; 
 import 'package:geolocator/geolocator.dart';
 import 'package:image/image.dart' as img;
+import 'map_screen.dart'; // Map Screen එක import කරගන්න
 
 void main() {
   runApp(const RiceApp());
@@ -39,7 +39,6 @@ class _HomeScreenState extends State<HomeScreen> {
   double? _lat;
   double? _lng;
 
-  // ස්ථානය ලබා ගැනීම
   Future<Position> _determinePosition() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return Future.error('Location services are disabled.');
@@ -96,6 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
       
       var uri = Uri.parse('http://192.168.8.163:5000/predict'); 
       var request = http.MultipartRequest('POST', uri);
+      
       request.files.add(await http.MultipartFile.fromPath('image', croppedFile.path));
       request.fields['lat'] = _lat.toString();
       request.fields['lng'] = _lng.toString();
@@ -106,15 +106,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         if (decodedData['status'] == 'success') {
-          // අගයන් ප්‍රතිශතයන් ලෙස ලබා ගැනීම
           double dis = (decodedData['disease_score'] ?? 0.0) * 100;
           double def = (decodedData['deficiency_score'] ?? 0.0) * 100;
+          double diff = (dis - def).abs();
 
-          _result = "විශ්ලේෂණය:\n"
-                    "රෝග ලක්ෂණ: ${dis.toStringAsFixed(0)}% | ඌණතා: ${def.toStringAsFixed(0)}%\n"
+          String statusTag = diff < 15 
+              ? "⚠️ මිශ්‍ර ලක්ෂණ පවතින බවට සැක කෙරේ\n" 
+              : "✅ සාර්ථකව හඳුනා ගන්නා ලදී\n";
+
+          _result = "$statusTag"
                     "----------------------------------\n"
                     "ප්‍රධාන නිගමනය: ${decodedData['prediction']}\n"
-                    "විශ්වාසනීයත්වය: ${(decodedData['confidence'] * 100).toStringAsFixed(2)}%\n\n"
+                    "විශ්වාසනීයත්වය: ${(decodedData['confidence'] * 100).toStringAsFixed(2)}%\n"
+                    "----------------------------------\n"
+                    "රෝග ලක්ෂණ: ${dis.toStringAsFixed(0)}%\n"
+                    "ඌණතා ලක්ෂණ: ${def.toStringAsFixed(0)}%\n"
+                    "----------------------------------\n"
                     "සටහන: ${decodedData['message']}";
           
           _heatmapBase64 = decodedData['heatmap'];
@@ -170,6 +177,14 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text("Rice Nutrient & Disease Analyzer"),
         backgroundColor: Colors.green[700],
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const MapScreen()));
+            }, 
+            icon: const Icon(Icons.map_rounded)
+          )
+        ],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -195,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
-                  child: Text(_result, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.5)),
+                  child: Text(_result, textAlign: TextAlign.left, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.6)),
                 ),
               ),
             ),
@@ -218,6 +233,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         label: const Text("Analyze Now"),
                         style: ElevatedButton.styleFrom(minimumSize: const Size(260, 50), backgroundColor: Colors.green[600], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))),
                       ),
+                    const SizedBox(height: 12),
+                    // --- Map එක පෙන්වන අලුත් Button එක ---
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const MapScreen()));
+                      },
+                      icon: const Icon(Icons.map_outlined),
+                      label: const Text("View Analysis Map"),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(260, 50), 
+                        backgroundColor: Colors.orange[800], 
+                        foregroundColor: Colors.white, 
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))
+                      ),
+                    ),
                     if (_heatmapBase64 != null)
                        Padding(
                          padding: const EdgeInsets.only(top: 10),

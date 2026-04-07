@@ -32,12 +32,10 @@ def predict_rice_health(image_path):
     
     leaf_pred = binary_model.predict(binary_input, verbose=0)
     
-    # පින්තූරය වී පත්‍රයක් නම් (ප්‍රස්තාර අනුව මෙහි නිරවද්‍යතාවය 99.9% කි)
     if leaf_pred[0][0] > 0.5:
         print(f"Leaf Detected: Rice Leaf (Confidence: {leaf_pred[0][0]:.4f})")
         
-        # --- දෙවන පියවර: පෝෂක ඌනතාවය හඳුනාගැනීම (Multi-label) ---
-        # පර්යේෂණයේ 116 පියවර අනුව පින්තූරය HSV වලට හැරවීම
+        # --- 2 step: to find the nutrient deficiency or disease ---
         img_hsv = cv2.cvtColor(img_resized, cv2.COLOR_RGB2HSV)
         hsv_input = img_hsv.astype('float32') / 255.0
         hsv_input = np.expand_dims(hsv_input, axis=0)
@@ -51,8 +49,7 @@ def predict_rice_health(image_path):
     else:
         return "Result: NOT a Rice Leaf. Please provide a clear rice leaf image."
 
-# --- ප්‍රායෝගිකව පරීක්ෂා කිරීම ---
-# පරීක්ෂා කිරීමට අවශ්‍ය පින්තූරයේ path එක මෙතනට ලබා දෙන්න
+# in this example, we will test with a single image. You can replace the path with any image you want to test.
 test_image_path = 'dataset/multi_label_classifier/Nitrogen_Deficiency/untitled-1.jpg'
 if os.path.exists(test_image_path):
     result = predict_rice_health(test_image_path)
