@@ -130,19 +130,24 @@ def predict():
         })
     except Exception as e: return jsonify({'error': str(e)}), 500
 
-# --- 5. Map දත්ත ලබාදෙන අලුත් Route එක (මෙහි දෝෂය තිබුණේ) ---
-@app.route('/get_locations', methods=['GET'])
-def get_locations():
+# --- 5. Map දත්ත ලබාදෙන අලුත් Route එක  ---
+@app.route('/get_latest_location', methods=['GET'])
+def get_latest_location():
     try:
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True) # JSON සඳහා අත්‍යවශ්‍යයි
-        cursor.execute("SELECT * FROM leaf_analysis")
-        rows = cursor.fetchall()
+        cursor = conn.cursor(dictionary=True)
+        # ID එක අනුව අන්තිමටම සේව් වුණු දත්තය (Latest Row) පමණක් ලබා ගනී
+        cursor.execute("SELECT * FROM leaf_analysis ORDER BY id DESC LIMIT 1")
+        row = cursor.fetchone()
         cursor.close()
         conn.close()
-        return jsonify(rows) # මෙහිදී දත්ත ලැයිස්තුවක් (List) ලැබේ
+        
+        if row:
+            return jsonify([row]) # Flutter එක List එකක් බලාපොරොත්තු වන නිසා [] තුල එවයි
+        else:
+            return jsonify([])
     except Exception as e:
-        print(f"❌ Map Data Error: {e}")
+        print(f"❌ API Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

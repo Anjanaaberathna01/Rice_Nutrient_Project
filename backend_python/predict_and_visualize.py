@@ -136,4 +136,4 @@ def predict_ensemble(image_path):
     print("="*65)
 
 # පරීක්ෂා කිරීමට රූපයේ නම මෙතැනට ඇතුළත් කරන්න
-predict_ensemble('6.jpeg')
+predict_ensemble('42.jpeg')

@@ -12,56 +12,52 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   Set<Marker> _markers = {};
-  bool _isLoading = true; // දත්ත එනකම් පෙන්වන්න
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchLocations();
+    _fetchLatestLocation();
   }
 
-  Future<void> _fetchLocations() async {
+  Future<void> _fetchLatestLocation() async {
     try {
-      final response = await http.get(Uri.parse('http://192.168.8.163:5000/get_locations'));
+      // ඔබගේ වත්මන් Backend IP එක පාවිච්චි කරන්න
+      final response = await http.get(Uri.parse('http://192.168.8.164:5000/get_latest_location'));
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         
-        // Debugging සඳහා ලොග් එකක් දාමු
-        print("Fetched Data: ${data.length} items found");
-
-        final Set<Marker> tempMarkers = data.map((item) {
-          // වැදගත්: Latitude/Longitude null හෝ වැරදි format නම් එය පාලනය කිරීම
+        if (data.isNotEmpty) {
+          final item = data[0];
           double lat = double.tryParse(item['latitude'].toString()) ?? 0.0;
           double lng = double.tryParse(item['longitude'].toString()) ?? 0.0;
           
-          double markerColor;
-          if (item['category'] == 'Disease') {
-            markerColor = BitmapDescriptor.hueRed;
-          } else {
-            markerColor = item['iot_status'] == 'Confirmed' 
-                ? BitmapDescriptor.hueBlue 
-                : BitmapDescriptor.hueOrange;
-          }
+          // Category අනුව වර්ණය තීරණය කිරීම
+          double markerColor = item['category'] == 'Disease' 
+              ? BitmapDescriptor.hueRed 
+              : BitmapDescriptor.hueOrange;
 
-          return Marker(
-            markerId: MarkerId(item['id'].toString()),
-            position: LatLng(lat, lng),
-            icon: BitmapDescriptor.defaultMarkerWithHue(markerColor),
-            infoWindow: InfoWindow(
-              title: item['prediction'],
-              snippet: "Confidence: ${(item['confidence'] * 100).toStringAsFixed(1)}%",
-            ),
-          );
-        }).toSet();
-
-        setState(() {
-          _markers = tempMarkers;
-          _isLoading = false;
-        });
+          setState(() {
+            _markers = {
+              Marker(
+                markerId: MarkerId(item['id'].toString()),
+                position: LatLng(lat, lng),
+                icon: BitmapDescriptor.defaultMarkerWithHue(markerColor),
+                infoWindow: InfoWindow(
+                  title: "නිගමනය: ${item['prediction']}",
+                  snippet: "විශ්වාසනීයත්වය: ${(item['confidence'] * 100).toStringAsFixed(1)}%",
+                ),
+              )
+            };
+            _isLoading = false;
+          });
+        } else {
+          setState(() { _isLoading = false; });
+        }
       }
     } catch (e) {
-      print("❌ Map Loading Error: $e");
+      debugPrint("❌ Map Error: $e");
       setState(() { _isLoading = false; });
     }
   }
@@ -70,19 +66,23 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Rice Field Analysis Map"), 
-        backgroundColor: Colors.green
+        title: const Text("Current Analysis Map"),
+        backgroundColor: Colors.green[700],
+        foregroundColor: Colors.white,
       ),
       body: _isLoading 
-          ? const Center(child: CircularProgressIndicator()) // Load වෙනකම් පෙන්වයි
+          ? const Center(child: CircularProgressIndicator())
           : GoogleMap(
-              initialCameraPosition: const CameraPosition(
-                target: LatLng(7.8731, 80.7718), // ශ්‍රී ලංකාවේ මැද ලක්ෂ්‍යයට සකස් කළා
-                zoom: 7,
+              initialCameraPosition: CameraPosition(
+                // අන්තිම ප්‍රතිඵලය ඇති ස්ථානයටම සිතියම Zoom කරවයි
+                target: _markers.isNotEmpty 
+                    ? _markers.first.position 
+                    : const LatLng(7.8731, 80.7718),
+                zoom: 16, // මීටර් 10-15 පරාසය බැලීමට සුදුසු Zoom අගයකි
               ),
               markers: _markers,
+              mapType: MapType.hybrid, // කුඹුරු සහ ගස් හොඳින් පෙනේ
               myLocationEnabled: true,
-              mapType: MapType.hybrid, // කුඹුරු පෙන්වීමට වඩාත් සුදුසුයි
             ),
     );
   }
