@@ -104,6 +104,15 @@ def predict():
         p_i = MODEL_INCEPTION.predict(in_i, verbose=0)[0]
 
         final_preds = (p_m * 0.3) + (p_d * 0.4) + (p_i * 0.3)
+        
+        is_disease = disease_prob > deficiency_prob
+        category_label = 'Disease' if is_disease else 'Deficiency'
+
+        if is_disease:
+            for idx in DEFICIENCY_INDICES: final_preds[idx] = 0
+        else:
+            for idx in DISEASE_INDICES: final_preds[idx] = 0
+
         uncertainty_threshold = 0.15
         diff = abs(disease_prob - deficiency_prob)
 
@@ -111,10 +120,6 @@ def predict():
             res_msg = f"පද්ධතිය රෝග ({disease_prob:.0%}) සහ ඌණතා ({deficiency_prob:.0%}) එකවර හඳුනා ගනී."
         else:
             res_msg = f"පද්ධතිය වැඩි නැඹුරුවක් {'රෝග' if is_disease else 'ඌණතා'} කෙරෙහි දක්වයි."
-            if is_disease:
-                for idx in DEFICIENCY_INDICES: final_preds[idx] = 0
-            else:
-                for idx in DISEASE_INDICES: final_preds[idx] = 0
 
         best_idx = np.argmax(final_preds)
         predicted_class = CLASS_NAMES[best_idx]

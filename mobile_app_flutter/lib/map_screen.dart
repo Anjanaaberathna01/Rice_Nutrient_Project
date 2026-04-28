@@ -23,7 +23,7 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _fetchLatestLocation() async {
     try {
       // ඔබගේ වත්මන් Backend IP එක පාවිච්චි කරන්න
-      final response = await http.get(Uri.parse('http://192.168.8.164:5000/get_latest_location'));
+      final response = await http.get(Uri.parse('http://172.20.10.8:5000/get_latest_location'));
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);

@@ -93,7 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _lat = position.latitude;
       _lng = position.longitude;
       
-      var uri = Uri.parse('http://192.168.8.164:5000/predict'); 
+      var uri = Uri.parse('http://172.20.10.8:5000/predict'); 
       var request = http.MultipartRequest('POST', uri);
       
       request.files.add(await http.MultipartFile.fromPath('image', croppedFile.path));
