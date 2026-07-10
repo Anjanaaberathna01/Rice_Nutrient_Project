@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:geolocator/geolocator.dart';
 import 'package:image/image.dart' as img;
-import 'map_screen.dart'; // Map Screen එක import කරගන්න
+import 'map_screen.dart';
 
 void main() {
   runApp(const RiceApp());
@@ -39,6 +39,16 @@ class _HomeScreenState extends State<HomeScreen> {
   double? _lat;
   double? _lng;
 
+  // 💡 ත්‍රිත්වකරණයට අවශ්‍ය Global Variables
+  String? _currentPredictionId;
+  String? _rawPredictionClass;
+  String? _rawCategory;
+
+  final List<String> _dsDivisions = ['anuradhapura'];
+  final Map<String, List<String>> _gnDivisions = {
+    'anuradhapura': ['srwasthipura'], 
+  };
+
   Future<Position> _determinePosition() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return Future.error('Location services are disabled.');
@@ -48,7 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return Future.error('Location permissions are denied');
     }
-    return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    return await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
   }
 
   Future<void> _pickImage() async {
@@ -61,6 +71,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _result = "පින්තූරය ලබාගත්තා. දැන් Analyze කරන්න.";
         _heatmapBase64 = null;
         _lat = null; _lng = null;
+        _currentPredictionId = null;
+        _rawPredictionClass = null;
+        _rawCategory = null;
       });
     }
   }
@@ -93,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _lat = position.latitude;
       _lng = position.longitude;
       
-      var uri = Uri.parse('http://172.20.10.8:5000/predict'); 
+      var uri = Uri.parse('http://192.168.8.163:5000/predict'); 
       var request = http.MultipartRequest('POST', uri);
       
       request.files.add(await http.MultipartFile.fromPath('image', croppedFile.path));
@@ -124,7 +137,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     "----------------------------------\n"
                     "සටහන: ${decodedData['message']}";
           
+          _currentPredictionId = decodedData['prediction_id']?.toString();
+          _rawPredictionClass = decodedData['prediction'];
+          _rawCategory = decodedData['category'];
           _heatmapBase64 = decodedData['heatmap'];
+          
           if (_heatmapBase64 != null) _showHeatmapDialog();
           
         } else {
@@ -136,6 +153,128 @@ class _HomeScreenState extends State<HomeScreen> {
     } finally {
       setState(() { _isLoading = false; });
     }
+  }
+
+  void _showLocationSearchDialog() {
+    final TextEditingController dsController = TextEditingController();
+    final TextEditingController gnController = TextEditingController();
+    String activeDS = '';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("ප්‍රදේශය ඇතුළත් කරන්න (Type to Search)"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Autocomplete<String>(
+                  optionsBuilder: (TextEditingValue textEditingValue) {
+                    if (textEditingValue.text.isEmpty) return const Iterable<String>.empty();
+                    return _dsDivisions.where((String option) => option.contains(textEditingValue.text.toLowerCase()));
+                  },
+                  onSelected: (String selection) {
+                    activeDS = selection;
+                    dsController.text = selection;
+                  },
+                  fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                    return TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      decoration: const InputDecoration(labelText: "ප්‍රාදේශීය ලේකම් කොට්ඨාශය", prefixIcon: Icon(Icons.search)),
+                    );
+                  },
+                ),
+                const SizedBox(height: 15),
+                Autocomplete<String>(
+                  optionsBuilder: (TextEditingValue textEditingValue) {
+                    if (textEditingValue.text.isEmpty || activeDS.isEmpty) return const Iterable<String>.empty();
+                    return _gnDivisions[activeDS]!.where((String option) => option.contains(textEditingValue.text.toLowerCase()));
+                  },
+                  onSelected: (String selection) {
+                    gnController.text = selection;
+                  },
+                  fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                    return TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      decoration: const InputDecoration(labelText: "ග්‍රාම නිලධාරී වසම", prefixIcon: Icon(Icons.location_city)),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+            ElevatedButton(
+              onPressed: () {
+                if (gnController.text.isNotEmpty && _currentPredictionId != null) {
+                  Navigator.pop(context);
+                  _fetchFertilizerRecommendation(
+                    _currentPredictionId!,
+                    gnController.text.trim(),
+                    _rawPredictionClass!,
+                    _rawCategory!,
+                  );
+                }
+              },
+              child: const Text("Validate & View Advice"),
+            )
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _fetchFertilizerRecommendation(String predId, String gn, String predClass, String cat) async {
+    setState(() { _isLoading = true; });
+    try {
+      var uri = Uri.parse('http://192.168.8.163:5000/validate_and_recommend_fertilizer');
+      var response = await http.post(
+        uri,
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({
+          "prediction_id": predId,
+          "gn_division": gn,
+          "prediction": predClass,
+          "category": cat
+        }),
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        var resData = json.decode(response.body);
+        setState(() { _isLoading = false; });
+        _showFertilizerResultDialog(resData['recommendation'] ?? 'දත්ත විශ්ලේෂණය අවසන්.');
+      } else {
+        setState(() { _isLoading = false; });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() { _isLoading = false; });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
+    }
+  }
+
+  void _showFertilizerResultDialog(String recommendationMessage) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.gavel_rounded, color: Colors.green),
+            SizedBox(width: 10),
+            Text("විද්‍යාත්මක ත්‍රිත්වකරණය"),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Text(recommendationMessage, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.5, color: Colors.black87)),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close", style: TextStyle(fontWeight: FontWeight.bold)))],
+      ),
+    );
   }
 
   void _showHeatmapDialog() {
@@ -155,7 +294,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         maxHeight: MediaQuery.of(context).size.height * 0.5,
                         maxWidth: MediaQuery.of(context).size.width * 0.8,
                       ),
-                      decoration: BoxDecoration(border: Border.all(color: Colors.green.withOpacity(0.5)), borderRadius: BorderRadius.circular(8)),
+                      decoration: BoxDecoration(border: Border.all(color: Colors.green.withValues(alpha: 0.5)), borderRadius: BorderRadius.circular(8)),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.memory(base64Decode(_heatmapBase64!), fit: BoxFit.contain),
@@ -234,7 +373,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: ElevatedButton.styleFrom(minimumSize: const Size(260, 50), backgroundColor: Colors.green[600], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))),
                       ),
                     const SizedBox(height: 12),
-                    // --- Map එක පෙන්වන අලුත් Button එක ---
+                    // 💡 Healthy නොවන ඕනෑම අවස්ථාවක (ඌණතා සහ රෝග දෙකටම) බටන් එක පෙන්වයි bn
+                    if (_currentPredictionId != null && _rawPredictionClass != 'Healthy')
+                      ElevatedButton.icon(
+                        onPressed: _showLocationSearchDialog,
+                        icon: const Icon(Icons.spoke_outlined),
+                        label: const Text("Get Fertilizer Advice"),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(260, 50), 
+                          backgroundColor: Colors.purple[700], 
+                          foregroundColor: Colors.white, 
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))
+                        ),
+                      ),
+                    const SizedBox(height: 12),
                     ElevatedButton.icon(
                       onPressed: () {
                         Navigator.push(context, MaterialPageRoute(builder: (context) => const MapScreen()));
@@ -248,11 +400,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))
                       ),
                     ),
-                    if (_heatmapBase64 != null)
-                       Padding(
-                         padding: const EdgeInsets.only(top: 10),
-                         child: TextButton.icon(onPressed: _showHeatmapDialog, icon: const Icon(Icons.remove_red_eye_outlined), label: const Text("View Heatmap")),
-                       ),
                   ],
                 ),
             const SizedBox(height: 30),
