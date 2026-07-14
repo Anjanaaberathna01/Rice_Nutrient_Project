@@ -12,65 +12,98 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   Set<Marker> _markers = {};
+
   bool _isLoading = true;
+
+  GoogleMapController? _mapController;
 
   @override
   void initState() {
     super.initState();
+
     _fetchLatestLocation();
   }
 
-  // 💡 Database එකේ ඇති marker_color අගය අනුව පැහැදිලි වර්ණ තෝරාගැනීම bn
-  double _getMarkerHue(String? colorStr) {
-    if (colorStr == "GREEN") return BitmapDescriptor.hueGreen;   // Validated (නිවැරදියි)
-    if (colorStr == "RED") return BitmapDescriptor.hueRed;       // Rejected (වැරදියි)
-    return BitmapDescriptor.hueOrange;                           // Pending / Disease (තැඹිලි)
+  double _getMarkerHue(String? color) {
+    switch (color) {
+      case "GREEN":
+        return BitmapDescriptor.hueGreen;
+
+      case "RED":
+        return BitmapDescriptor.hueRed;
+
+      default:
+        return BitmapDescriptor.hueOrange;
+    }
   }
 
   Future<void> _fetchLatestLocation() async {
     try {
-      final response = await http.get(Uri.parse('http://192.168.8.163:5000/get_latest_location'));
+      final response = await http.get(
+        Uri.parse('http://192.168.8.163:5000/get_latest_location'),
+      );
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        Set<Marker> tempMarkers = {};
-        
-        if (data.isNotEmpty) {
-          for (var item in data) {
-            double lat = double.tryParse(item['latitude'].toString()) ?? 0.0;
-            double lng = double.tryParse(item['longitude'].toString()) ?? 0.0;
-            String? mColor = item['marker_color'];
-            String validationStatus = item['status'] ?? "Pending";
-            
-            String predictionLabel = item['prediction'] ?? "Unknown";
-            if (predictionLabel == "Nitrogen_Deficiency") predictionLabel = "නයිට්‍රජන් ඌණතාවය (N)";
-            if (predictionLabel == "Phosphorus_Deficiency") predictionLabel = "පොස්පරස් ඌණතාවය (P)";
-            if (predictionLabel == "Potassium_Deficiency") predictionLabel = "පොටෑසියම් ඌණතාවය (K)";
+        List<dynamic> data = json.decode(response.body);
 
-            tempMarkers.add(
-              Marker(
-                markerId: MarkerId(item['id'].toString()),
-                position: LatLng(lat, lng),
-                icon: BitmapDescriptor.defaultMarkerWithHue(_getMarkerHue(mColor)),
-                infoWindow: InfoWindow(
-                  title: "AI නිගමනය: $predictionLabel",
-                  snippet: "තත්ත්වය: $validationStatus | විශ්වාසය: ${((item['confidence'] ?? 0.0) * 100).toStringAsFixed(1)}%",
-                ),
-              )
-            );
+        Set<Marker> newMarkers = {};
+
+        LatLng? latestPosition;
+
+        for (var item in data) {
+          if (item['latitude'] == null || item['longitude'] == null) {
+            continue;
           }
 
-          setState(() {
-            _markers = tempMarkers;
-            _isLoading = false;
-          });
-        } else {
-          setState(() { _isLoading = false; });
+          double lat = double.parse(item['latitude'].toString());
+
+          double lng = double.parse(item['longitude'].toString());
+
+          LatLng position = LatLng(lat, lng);
+
+          latestPosition = position;
+
+          newMarkers.add(
+            Marker(
+              markerId: MarkerId(item['id'].toString()),
+
+              position: position,
+
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                _getMarkerHue(item['marker_color']),
+              ),
+
+              infoWindow: InfoWindow(
+                title: item['prediction'] ?? "Unknown",
+
+                snippet:
+                    "Status : ${item['status']}\n"
+                    "Category : ${item['category']}\n"
+                    "Confidence : "
+                    "${((double.tryParse(item['confidence'].toString()) ?? 0) * 100).toStringAsFixed(1)}%",
+              ),
+            ),
+          );
+        }
+
+        setState(() {
+          _markers = newMarkers;
+
+          _isLoading = false;
+        });
+
+        if (latestPosition != null && _mapController != null) {
+          _mapController!.animateCamera(
+            CameraUpdate.newLatLngZoom(latestPosition, 17),
+          );
         }
       }
     } catch (e) {
-      debugPrint("❌ Map Error: $e");
-      setState(() { _isLoading = false; });
+      debugPrint("MAP ERROR : $e");
+
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -78,22 +111,35 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Current Analysis Map"),
+        title: const Text("Analysis Map"),
+
         backgroundColor: Colors.green[700],
-        foregroundColor: Colors.white,
+
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+
+            onPressed: _fetchLatestLocation,
+          ),
+        ],
       ),
-      body: _isLoading 
+
+      body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: _markers.isNotEmpty 
-                    ? _markers.first.position 
-                    : const LatLng(7.8731, 80.7718),
-                zoom: 16, 
+              onMapCreated: (controller) {
+                _mapController = controller;
+              },
+
+              initialCameraPosition: const CameraPosition(
+                target: LatLng(7.8731, 80.7718),
+
+                zoom: 8,
               ),
+
               markers: _markers,
-              mapType: MapType.hybrid, 
-              myLocationEnabled: true,
+
+              mapType: MapType.hybrid,
             ),
     );
   }

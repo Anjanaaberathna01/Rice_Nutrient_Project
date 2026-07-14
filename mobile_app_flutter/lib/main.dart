@@ -34,7 +34,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   File? _selectedImage;
   String _result = "තවමත් විශ්ලේෂණය කර නැත";
-  String? _heatmapBase64; 
+  String? _heatmapBase64;
   bool _isLoading = false;
   double? _lat;
   double? _lng;
@@ -46,7 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<String> _dsDivisions = ['anuradhapura'];
   final Map<String, List<String>> _gnDivisions = {
-    'anuradhapura': ['srwasthipura'], 
+    'anuradhapura': ['srwasthipura'],
   };
 
   Future<Position> _determinePosition() async {
@@ -56,21 +56,29 @@ class _HomeScreenState extends State<HomeScreen> {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return Future.error('Location permissions are denied');
+      if (permission == LocationPermission.denied){
+        return Future.error('Location permissions are denied');
+      }
     }
-    return await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
+    return await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+    );
   }
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 100);
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 100,
+    );
 
     if (image != null) {
       setState(() {
         _selectedImage = File(image.path);
         _result = "පින්තූරය ලබාගත්තා. දැන් Analyze කරන්න.";
         _heatmapBase64 = null;
-        _lat = null; _lng = null;
+        _lat = null;
+        _lng = null;
         _currentPredictionId = null;
         _rawPredictionClass = null;
         _rawCategory = null;
@@ -81,9 +89,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _uploadImage() async {
     if (_selectedImage == null) return;
 
-    setState(() { 
-      _isLoading = true; 
-      _result = "පින්තූරය පිරිසැකසුම් කරමින් විශ්ලේෂණය කරයි..."; 
+    setState(() {
+      _isLoading = true;
+      _result = "පින්තූරය පිරිසැකසුම් කරමින් විශ්ලේෂණය කරයි...";
     });
 
     try {
@@ -91,11 +99,13 @@ class _HomeScreenState extends State<HomeScreen> {
       img.Image? originalImage = img.decodeImage(bytes);
       if (originalImage == null) throw Exception("Could not decode image");
 
-      int cropWidth = (originalImage.width * 0.4).toInt(); 
+      int cropWidth = (originalImage.width * 0.4).toInt();
       img.Image croppedImage = img.copyCrop(
-        originalImage, 
-        x: (originalImage.width - cropWidth) ~/ 2, y: 0, 
-        width: cropWidth, height: originalImage.height
+        originalImage,
+        x: (originalImage.width - cropWidth) ~/ 2,
+        y: 0,
+        width: cropWidth,
+        height: originalImage.height,
       );
 
       final tempDir = Directory.systemTemp;
@@ -105,11 +115,13 @@ class _HomeScreenState extends State<HomeScreen> {
       Position position = await _determinePosition();
       _lat = position.latitude;
       _lng = position.longitude;
-      
-      var uri = Uri.parse('http://192.168.8.163:5000/predict'); 
+
+      var uri = Uri.parse('http://192.168.8.163:5000/predict');
       var request = http.MultipartRequest('POST', uri);
-      
-      request.files.add(await http.MultipartFile.fromPath('image', croppedFile.path));
+
+      request.files.add(
+        await http.MultipartFile.fromPath('image', croppedFile.path),
+      );
       request.fields['lat'] = _lat.toString();
       request.fields['lng'] = _lng.toString();
 
@@ -123,35 +135,39 @@ class _HomeScreenState extends State<HomeScreen> {
           double def = (decodedData['deficiency_score'] ?? 0.0) * 100;
           double diff = (dis - def).abs();
 
-          String statusTag = diff < 15 
-              ? "⚠️ මිශ්‍ර ලක්ෂණ පවතින බවට සැක කෙරේ\n" 
+          String statusTag = diff < 15
+              ? "⚠️ මිශ්‍ර ලක්ෂණ පවතින බවට සැක කෙරේ\n"
               : "✅ සාර්ථකව හඳුනා ගන්නා ලදී\n";
 
-          _result = "$statusTag"
-                    "----------------------------------\n"
-                    "ප්‍රධාන නිගමනය: ${decodedData['prediction']}\n"
-                    "විශ්වාසනීයත්වය: ${(decodedData['confidence'] * 100).toStringAsFixed(2)}%\n"
-                    "----------------------------------\n"
-                    "රෝග ලක්ෂණ: ${dis.toStringAsFixed(0)}%\n"
-                    "ඌණතා ලක්ෂණ: ${def.toStringAsFixed(0)}%\n"
-                    "----------------------------------\n"
-                    "සටහන: ${decodedData['message']}";
-          
+          _result =
+              "$statusTag"
+              "----------------------------------\n"
+              "ප්‍රධාන නිගමනය: ${decodedData['prediction']}\n"
+              "විශ්වාසනීයත්වය: ${(decodedData['confidence'] * 100).toStringAsFixed(2)}%\n"
+              "----------------------------------\n"
+              "රෝග ලක්ෂණ: ${dis.toStringAsFixed(0)}%\n"
+              "ඌණතා ලක්ෂණ: ${def.toStringAsFixed(0)}%\n"
+              "----------------------------------\n"
+              "සටහන: ${decodedData['message']}";
+
           _currentPredictionId = decodedData['prediction_id']?.toString();
           _rawPredictionClass = decodedData['prediction'];
           _rawCategory = decodedData['category'];
           _heatmapBase64 = decodedData['heatmap'];
-          
+
           if (_heatmapBase64 != null) _showHeatmapDialog();
-          
         } else {
           _result = "දෝෂයකි: ${decodedData['message']}";
         }
       });
     } catch (e) {
-      setState(() { _result = "සම්බන්ධතා දෝෂයකි: $e"; });
+      setState(() {
+        _result = "සම්බන්ධතා දෝෂයකි: $e";
+      });
     } finally {
-      setState(() { _isLoading = false; });
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -171,49 +187,74 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Autocomplete<String>(
                   optionsBuilder: (TextEditingValue textEditingValue) {
-                    if (textEditingValue.text.isEmpty) return const Iterable<String>.empty();
-                    return _dsDivisions.where((String option) => option.contains(textEditingValue.text.toLowerCase()));
-                  },
-                  onSelected: (String selection) {
-                    activeDS = selection;
-                    dsController.text = selection;
-                  },
-                  fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                    return TextField(
-                      controller: controller,
-                      focusNode: focusNode,
-                      decoration: const InputDecoration(labelText: "ප්‍රාදේශීය ලේකම් කොට්ඨාශය", prefixIcon: Icon(Icons.search)),
+                    if (textEditingValue.text.isEmpty){
+                      return const Iterable<String>.empty();
+                    }
+                    return _dsDivisions.where(
+                      (String option) =>
+                          option.contains(textEditingValue.text.toLowerCase()),
                     );
                   },
+                  onSelected: (String selection) {
+                    setState(() {
+                      activeDS = selection;
+                    });
+
+                    dsController.text = selection;
+                  },
+                  fieldViewBuilder:
+                      (context, controller, focusNode, onFieldSubmitted) {
+                        return TextField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: const InputDecoration(
+                            labelText: "ප්‍රාදේශීය ලේකම් කොට්ඨාශය",
+                            prefixIcon: Icon(Icons.search),
+                          ),
+                        );
+                      },
                 ),
                 const SizedBox(height: 15),
                 Autocomplete<String>(
                   optionsBuilder: (TextEditingValue textEditingValue) {
-                    if (textEditingValue.text.isEmpty || activeDS.isEmpty) return const Iterable<String>.empty();
-                    return _gnDivisions[activeDS]!.where((String option) => option.contains(textEditingValue.text.toLowerCase()));
+                    if (textEditingValue.text.isEmpty || activeDS.isEmpty)
+                      return const Iterable<String>.empty();
+                    return _gnDivisions[activeDS]!.where(
+                      (String option) =>
+                          option.contains(textEditingValue.text.toLowerCase()),
+                    );
                   },
                   onSelected: (String selection) {
                     gnController.text = selection;
                   },
-                  fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                    return TextField(
-                      controller: controller,
-                      focusNode: focusNode,
-                      decoration: const InputDecoration(labelText: "ග්‍රාම නිලධාරී වසම", prefixIcon: Icon(Icons.location_city)),
-                    );
-                  },
+                  fieldViewBuilder:
+                      (context, controller, focusNode, onFieldSubmitted) {
+                        return TextField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: const InputDecoration(
+                            labelText: "ග්‍රාම නිලධාරී වසම",
+                            prefixIcon: Icon(Icons.location_city),
+                          ),
+                        );
+                      },
                 ),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
             ElevatedButton(
               onPressed: () {
-                if (gnController.text.isNotEmpty && _currentPredictionId != null) {
+                if (gnController.text.isNotEmpty &&
+                    _currentPredictionId != null) {
                   Navigator.pop(context);
                   _fetchFertilizerRecommendation(
                     _currentPredictionId!,
+                    dsController.text.trim(),
                     gnController.text.trim(),
                     _rawPredictionClass!,
                     _rawCategory!,
@@ -221,39 +262,75 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
               },
               child: const Text("Validate & View Advice"),
-            )
+            ),
           ],
         );
       },
     );
   }
 
-  Future<void> _fetchFertilizerRecommendation(String predId, String gn, String predClass, String cat) async {
-    setState(() { _isLoading = true; });
+  Future<void> _fetchFertilizerRecommendation(
+    String predId,
+    String ds,
+    String gn,
+    String predClass,
+    String cat,
+  ) async {
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
-      var uri = Uri.parse('http://192.168.8.163:5000/validate_and_recommend_fertilizer');
+      var uri = Uri.parse(
+        'http://192.168.8.163:5000/validate_and_recommend_fertilizer',
+      );
+
       var response = await http.post(
         uri,
         headers: {"Content-Type": "application/json"},
         body: json.encode({
           "prediction_id": predId,
+
+          "ds_division": ds,
+
           "gn_division": gn,
+
           "prediction": predClass,
-          "category": cat
+
+          "category": cat,
         }),
       );
 
       if (response.statusCode == 200 && mounted) {
         var resData = json.decode(response.body);
-        setState(() { _isLoading = false; });
-        _showFertilizerResultDialog(resData['recommendation'] ?? 'දත්ත විශ්ලේෂණය අවසන්.');
+
+        setState(() {
+          _isLoading = false;
+        });
+
+        // recommendation dialog
+
+        _showFertilizerResultDialog(
+          resData['recommendation'] ?? "No recommendation found",
+        );
       } else {
-        setState(() { _isLoading = false; });
+        setState(() {
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Server Error : ${response.statusCode}")),
+        );
       }
     } catch (e) {
       if (mounted) {
-        setState(() { _isLoading = false; });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+        setState(() {
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Connection Error : $e")));
       }
     }
   }
@@ -270,9 +347,25 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         content: SingleChildScrollView(
-          child: Text(recommendationMessage, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.5, color: Colors.black87)),
+          child: Text(
+            recommendationMessage,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              height: 1.5,
+              color: Colors.black87,
+            ),
+          ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close", style: TextStyle(fontWeight: FontWeight.bold)))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              "Close",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -281,12 +374,19 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Ensemble Attention Map", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text(
+          "Ensemble Attention Map",
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("මොඩලය පත්‍රයේ අවධානය යොමු කළ ස්ථාන මෙහි වර්ණ ගැන්වී පෙන්වයි.", style: TextStyle(fontSize: 12), textAlign: TextAlign.center),
+              const Text(
+                "මොඩලය පත්‍රයේ අවධානය යොමු කළ ස්ථාන මෙහි වර්ණ ගැන්වී පෙන්වයි.",
+                style: TextStyle(fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 15),
               _heatmapBase64 != null
                   ? Container(
@@ -294,21 +394,34 @@ class _HomeScreenState extends State<HomeScreen> {
                         maxHeight: MediaQuery.of(context).size.height * 0.5,
                         maxWidth: MediaQuery.of(context).size.width * 0.8,
                       ),
-                      decoration: BoxDecoration(border: Border.all(color: Colors.green.withValues(alpha: 0.5)), borderRadius: BorderRadius.circular(8)),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Colors.green.withValues(alpha: 0.5),
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.memory(base64Decode(_heatmapBase64!), fit: BoxFit.contain),
+                        child: Image.memory(
+                          base64Decode(_heatmapBase64!),
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     )
                   : const Text("Heatmap ලබා ගත නොහැක"),
             ],
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Close"),
+          ),
+        ],
       ),
     );
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -319,10 +432,13 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const MapScreen()));
-            }, 
-            icon: const Icon(Icons.map_rounded)
-          )
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MapScreen()),
+              );
+            },
+            icon: const Icon(Icons.map_rounded),
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -331,12 +447,20 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 20),
             Center(
               child: Container(
-                width: 220, height: 400,
-                decoration: BoxDecoration(border: Border.all(color: Colors.green, width: 3), borderRadius: BorderRadius.circular(15)),
+                width: 220,
+                height: 400,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.green, width: 3),
+                  borderRadius: BorderRadius.circular(15),
+                ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: _selectedImage == null
-                      ? const Icon(Icons.center_focus_weak, size: 50, color: Colors.grey)
+                      ? const Icon(
+                          Icons.center_focus_weak,
+                          size: 50,
+                          color: Colors.grey,
+                        )
                       : Image.file(_selectedImage!, fit: BoxFit.cover),
                 ),
               ),
@@ -346,62 +470,96 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Card(
                 elevation: 4,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
-                  child: Text(_result, textAlign: TextAlign.left, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.6)),
+                  child: Text(
+                    _result,
+                    textAlign: TextAlign.left,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      height: 1.6,
+                    ),
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 20),
-            _isLoading 
-              ? const CircularProgressIndicator(color: Colors.green)
-              : Column(
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: _pickImage,
-                      icon: const Icon(Icons.camera_alt),
-                      label: const Text("Capture Leaf"),
-                      style: ElevatedButton.styleFrom(minimumSize: const Size(260, 50), backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))),
-                    ),
-                    const SizedBox(height: 12),
-                    if (_selectedImage != null)
+            _isLoading
+                ? const CircularProgressIndicator(color: Colors.green)
+                : Column(
+                    children: [
                       ElevatedButton.icon(
-                        onPressed: _uploadImage,
-                        icon: const Icon(Icons.analytics_outlined),
-                        label: const Text("Analyze Now"),
-                        style: ElevatedButton.styleFrom(minimumSize: const Size(260, 50), backgroundColor: Colors.green[600], foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))),
-                      ),
-                    const SizedBox(height: 12),
-                    // 💡 Healthy නොවන ඕනෑම අවස්ථාවක (ඌණතා සහ රෝග දෙකටම) බටන් එක පෙන්වයි bn
-                    if (_currentPredictionId != null && _rawPredictionClass != 'Healthy')
-                      ElevatedButton.icon(
-                        onPressed: _showLocationSearchDialog,
-                        icon: const Icon(Icons.spoke_outlined),
-                        label: const Text("Get Fertilizer Advice"),
+                        onPressed: _pickImage,
+                        icon: const Icon(Icons.camera_alt),
+                        label: const Text("Capture Leaf"),
                         style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(260, 50), 
-                          backgroundColor: Colors.purple[700], 
-                          foregroundColor: Colors.white, 
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))
+                          minimumSize: const Size(260, 50),
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
                         ),
                       ),
-                    const SizedBox(height: 12),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (context) => const MapScreen()));
-                      },
-                      icon: const Icon(Icons.map_outlined),
-                      label: const Text("View Analysis Map"),
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(260, 50), 
-                        backgroundColor: Colors.orange[800], 
-                        foregroundColor: Colors.white, 
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))
+                      const SizedBox(height: 12),
+                      if (_selectedImage != null)
+                        ElevatedButton.icon(
+                          onPressed: _uploadImage,
+                          icon: const Icon(Icons.analytics_outlined),
+                          label: const Text("Analyze Now"),
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(260, 50),
+                            backgroundColor: Colors.green[600],
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      // 💡 Healthy නොවන ඕනෑම අවස්ථාවක (ඌණතා සහ රෝග දෙකටම) බටන් එක පෙන්වයි bn
+                      if (_currentPredictionId != null &&
+                          _rawPredictionClass != 'Healthy')
+                        ElevatedButton.icon(
+                          onPressed: _showLocationSearchDialog,
+                          icon: const Icon(Icons.spoke_outlined),
+                          label: const Text("Get Fertilizer Advice"),
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(260, 50),
+                            backgroundColor: Colors.purple[700],
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const MapScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.map_outlined),
+                        label: const Text("View Analysis Map"),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(260, 50),
+                          backgroundColor: Colors.orange[800],
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
             const SizedBox(height: 30),
           ],
         ),

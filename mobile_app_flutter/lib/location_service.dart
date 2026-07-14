@@ -18,14 +18,14 @@ class LocationService {
         return Future.error('Location permissions are denied');
       }
     }
-    
+
     if (permission == LocationPermission.deniedForever) {
       return Future.error('Location permissions are permanently denied.');
     }
 
     // වත්මන් ස්ථානය ලබා ගැනීම
     return await Geolocator.getCurrentPosition(
-     locationSettings: const LocationSettings(
+      locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 10, // මීටර් 10ක් ඇතුළත වෙනසක් වුණොත් දැනුම් දෙන්න
       ),
