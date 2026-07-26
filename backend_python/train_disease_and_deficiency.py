@@ -11,7 +11,6 @@ from sklearn.metrics import confusion_matrix, classification_report
 import numpy as np
 import os
 
-# 1. පෝල්ඩර් සකස් කිරීම
 if not os.path.exists('reports'): os.makedirs('reports')
 if not os.path.exists('models'): os.makedirs('models')
 
@@ -34,7 +33,7 @@ train_generator = train_datagen.flow_from_directory(
     dataset_path,
     target_size=(224, 224),
     batch_size=16,
-    class_mode='categorical', # පන්ති දෙකම වෙන වෙනම හඳුනා ගැනීමට
+    class_mode='categorical',
     subset='training'
 )
 
@@ -49,14 +48,14 @@ validation_generator = train_datagen.flow_from_directory(
 
 # 3. Model Architecture (Softmax for Probabilities)
 base_model = DenseNet121(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
-base_model.trainable = False # මුලින් Base Model එක Freeze කරමු
+base_model.trainable = False
 
 x = base_model.output
 x = GlobalAveragePooling2D()(x)
 x = BatchNormalization()(x)
 x = Dense(512, activation='relu')(x)
 x = Dropout(0.5)(x)
-predictions = Dense(2, activation='softmax')(x) # නියුරෝන 2 සහ Softmax
+predictions = Dense(2, activation='softmax')(x)
 
 model = Model(inputs=base_model.input, outputs=predictions)
 
@@ -70,14 +69,13 @@ model_save_path = 'models/rice_binary_disease_and_deficiency_v2.h5'
 checkpoint = ModelCheckpoint(model_save_path, monitor='val_accuracy', save_best_only=True, mode='max', verbose=1)
 early_stop = EarlyStopping(monitor='val_loss', patience=7, restore_best_weights=True)
 
-# 6. පියවර 01: Initial Training
+# 6. Initial Training
 print("Starting Initial Training...")
 model.fit(train_generator, epochs=10, validation_data=validation_generator, callbacks=[checkpoint, early_stop])
 
-# --- 7. පියවර 02: Fine-Tuning (Accuracy 90% කරා ගෙන යාමට) ---
+# --- 7.Fine-Tuning  ---
 print("Starting Fine-Tuning...")
 base_model.trainable = True
-# මුල් ලේයර්ස් 100 ක් Freeze කර ඉතිරි ඒවා පුහුණු කිරීම
 for layer in base_model.layers[:100]:
     layer.trainable = False
 
@@ -92,11 +90,11 @@ history = model.fit(
     callbacks=[checkpoint, early_stop]
 )
 
-# 8. Evaluation (Confusion Matrix නිවැරදි කිරීම)
+# 8. Evaluation 
 def save_matrix_and_report():
     validation_generator.reset()
     Y_pred = model.predict(validation_generator)
-    y_pred = np.argmax(Y_pred, axis=1) # වැඩිම සම්භාවිතාව ඇති පන්තිය තෝරා ගැනීම
+    y_pred = np.argmax(Y_pred, axis=1) 
     
     cm = confusion_matrix(validation_generator.classes, y_pred)
     plt.figure(figsize=(8, 6))

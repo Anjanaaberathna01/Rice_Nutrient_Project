@@ -13,7 +13,7 @@ import os
 IMG_SIZE = (224, 224)
 BATCH_SIZE = 32
 
-# 2. Data Augmentation (පුහුණු දත්ත සඳහා පමණි)
+# 2. Data Augmentation 
 train_datagen = ImageDataGenerator(
     rescale=1./255,
     rotation_range=40,
@@ -26,10 +26,10 @@ train_datagen = ImageDataGenerator(
     validation_split=0.2
 )
 
-# Validation සඳහා පිරිසිදු Generator එකක් (Augmentation නැතිව)
+# validation 
 val_datagen = ImageDataGenerator(rescale=1./255, validation_split=0.2)
 
-# 3. Dataset එක Load කිරීම
+# 3. load a dataset
 train_generator = train_datagen.flow_from_directory(
     'dataset/binary_classifier',
     target_size=IMG_SIZE,
@@ -44,17 +44,17 @@ val_generator = val_datagen.flow_from_directory(
     batch_size=BATCH_SIZE,
     class_mode='binary',
     subset='validation',
-    shuffle=False # Confusion Matrix එක සඳහා අත්‍යවශ්‍යයි
+    shuffle=False 
 )
 
-# --- අලුතින් එකතු කළ කොටස: Class Weights ---
-# Non-Rice (21,000) සහ Rice (15,000) අතර සමබරතාවය රැකීමට
+# class weight 
+
 labels = train_generator.classes
 weights = class_weight.compute_class_weight('balanced', classes=np.unique(labels), y=labels)
 class_weights = {i: weights[i] for i in range(len(weights))}
 print(f"Class Weights: {class_weights}")
 
-# 4. MobileNetV2 Model එක සෑදීම
+# 4. MobileNetV2 Model
 base_model = MobileNetV2(input_shape=(224, 224, 3), include_top=False, weights='imagenet')
 base_model.trainable = False
 
@@ -67,14 +67,13 @@ model = models.Sequential([
     layers.Dense(1, activation='sigmoid') 
 ])
 
-# 5. Compile කිරීම
+# 5. Compile
 model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
-# --- අලුතින් එකතු කළ කොටස: Callbacks ---
-# Overfitting වැළැක්වීමට හොඳම weights පමණක් ලබා ගනිමු
+
 early_stop = callbacks.EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
 
-# 6. Model එක පුහුණු කිරීම
+# 6. Model train
 print("Training started...")
 history = model.fit(
     train_generator,
@@ -84,7 +83,7 @@ history = model.fit(
     callbacks=[early_stop]
 )
 
-# --- Fine-Tuning ආරම්භය ---
+# --- Fine-Tuning ---
 print("Fine-tuning started...")
 base_model.trainable = True
 for layer in base_model.layers[:100]:
@@ -102,18 +101,16 @@ history_fine = model.fit(
     callbacks=[early_stop]
 )
 
-# 7. Model එක සේව් කිරීම
 if not os.path.exists('models'): os.makedirs('models')
 model.save('models/rice_binary_model.h5')
 print("Model saved successfully!")
 
-# --- ඇගයීම් කොටස (Evaluation Section) ---
 
-# Reports සඳහා Folder එකක් සෑදීම
+# Reports
 if not os.path.exists('reports'):
     os.makedirs('reports')
 
-# A. Accuracy සහ Loss Graphs ඇඳීම
+# A. Accuracy and Loss Graphs 
 acc = history.history['accuracy']
 val_acc = history.history['val_accuracy']
 loss = history.history['loss']
@@ -136,7 +133,7 @@ plt.legend()
 plt.savefig('reports/binary_learning_curves.png')
 plt.show()
 
-# B. Confusion Matrix එක සෑදීම
+# B. Confusion Matrix 
 print("\nGenerating Confusion Matrix...")
 val_generator.reset()
 Y_pred = model.predict(val_generator)
@@ -155,6 +152,6 @@ plt.xlabel('Predicted Label')
 plt.savefig('reports/binary_confusion_matrix.png')
 plt.show()
 
-# C. Precision, Recall වාර්තාව
+# C. Precision, Recall
 print("\nClassification Report:")
 print(classification_report(val_generator.classes, y_pred, target_names=['Non-Rice', 'Rice']))

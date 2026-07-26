@@ -13,6 +13,7 @@ import mysql.connector
 app = Flask(__name__)
 CORS(app)
 
+# - soil reference CSV file path
 CSV_PATH = "database/soil_reference.csv"
 
 def get_db_connection():
@@ -43,7 +44,7 @@ def save_to_db(prediction, category, confidence, dis_score, def_score, lat, lng)
         if cursor: cursor.close()
         if conn: conn.close()
 
-# --- AI Models Load (ඔයාගේ models folder path එක හරියට තියෙන්න ඕනේ) ---
+
 try:
     RICE_VS_NONRICE_MODEL = tf.keras.models.load_model('models/rice_binary_model.h5', compile=False)
     DISEASE_VS_DEFICIENCY_MODEL = tf.keras.models.load_model('models/rice_binary_disease_and_deficiency_v2.h5', compile=False)
@@ -53,6 +54,7 @@ try:
 except Exception as e:
     print("Error loading models:", e)
 
+# Define class names and indices for deficiencies and diseases
 CLASS_NAMES = ['Bacterial_Leaf_Blight', 'Brown_Spot', 'Healthy', 'Leaf_Blast', 'Leaf_Scald', 'Nitrogen_Deficiency', 'Phosphorus_Deficiency', 'Potassium_Deficiency', 'Sheath_Blight']
 DEFICIENCY_INDICES = [2, 5, 6, 7]
 DISEASE_INDICES = [0, 1, 3, 4, 8]
@@ -94,22 +96,30 @@ def predict():
         img_224 = cv2.resize(img_np, (224,224))
         rice_check_input = np.expand_dims(img_224 / 255.0, axis=0)
 
+        # Check if the image is of a rice leaf using the RICE_VS_NONRICE_MODEL
+
         is_rice_score = float(RICE_VS_NONRICE_MODEL.predict(rice_check_input, verbose=0)[0][0])
         if is_rice_score < 0.85:
             return jsonify({"status":"invalid", "message":"මෙය වී පත්‍රයක් නොවේ.", "score":is_rice_score})
+        
+        # If it is a rice leaf, proceed to classify it as disease or deficiency
 
         bin_preds = DISEASE_VS_DEFICIENCY_MODEL.predict(rice_check_input, verbose=0)[0]
         deficiency_prob = float(bin_preds[0])
         disease_prob = float(bin_preds[1])
 
+        # Preprocess the image for each model and get predictions
+
         in_m = tf.keras.applications.mobilenet_v2.preprocess_input(img_224.copy().reshape(1,224,224,3))
         in_d = tf.keras.applications.densenet.preprocess_input(img_224.copy().reshape(1,224,224,3))
         in_i = tf.keras.applications.inception_v3.preprocess_input(img_224.copy().reshape(1,224,224,3))
 
+        # Get predictions from each model
         p_m = MODEL_MOBILE.predict(in_m, verbose=0)[0]
         p_d = MODEL_DENSE.predict(in_d, verbose=0)[0]
         p_i = MODEL_INCEPTION.predict(in_i, verbose=0)[0]
 
+        # Combine predictions with weights
         final_preds = (p_m * 0.3) + (p_d * 0.4) + (p_i * 0.3)
         is_disease = disease_prob > deficiency_prob
         category_label = "Disease" if is_disease else "Deficiency"
@@ -123,6 +133,7 @@ def predict():
         predicted_class = CLASS_NAMES[best_idx]
         confidence = float(final_preds[best_idx])
 
+        # Save the prediction to the database
         prediction_id = save_to_db(predicted_class, category_label, confidence, disease_prob, deficiency_prob, lat, lng)
 
         return jsonify({
@@ -134,7 +145,7 @@ def predict():
             "disease_score":disease_prob,
             "deficiency_score":deficiency_prob,
             "heatmap":generate_heatmap_base64(img_np, MODEL_DENSE),
-            "message": "AI විශ්ලේෂණය සාර්ථකයි."
+            "message": "Prediction completed successfully."
         })
     except Exception as e:
         return jsonify({"status":"error", "message":str(e)}), 500
@@ -163,27 +174,86 @@ def validate_and_recommend_fertilizer():
         ai_prediction = data.get('prediction')
         category = data.get('category')
 
+        # is disease, return recommendation directly without checking CSV
         if category == "Disease":
             return jsonify({
                 "status": "success",
                 "validation_status": "Pending",
                 "map_color": "ORANGE",
-                "recommendation": "මෙය රෝගී තත්ත්වයකි. සුදුසු දිලීර නාශකයක් භාවිත කරන්න."
+                "recommendation": f"AI මඟින් පත්‍රයේ පවතින්නේ '{ai_prediction}' රෝගය බව හඳුනාගෙන ඇත. මෙය පසෙහි පෝෂක හිඟයක් නොවන බැවින් පස් වාර්තාවන් මෙයට අදාළ නොවේ. සුදුසු කෘෂිකාර්මික දිලීර/බැක්ටීරියා නාශකයක් භාවිත කරන්න."
             })
 
+        # if deficiency, check the CSV for soil data
         df = pd.read_csv(CSV_PATH)
         df['gn_division'] = df['gn_division'].astype(str).str.strip().str.lower()
         df['ds_division'] = df['ds_division'].astype(str).str.strip().str.lower()
+        
         soil_record = df[(df['gn_division'] == user_gn) & (df['ds_division'] == user_ds)]
 
         if soil_record.empty:
-            return jsonify({"status": "success", "validation_status": "Pending", "map_color": "ORANGE", "recommendation": "පස් වාර්තා නොමැත."})
+            return jsonify({
+                "status": "success", 
+                "validation_status": "Pending", 
+                "map_color": "ORANGE", 
+                "recommendation": f"ඔබේ වසම ({data.get('gn_division')}) සඳහා පස් වාර්තාවක් පද්ධතියේ නොමැත. එබැවින් AI අනාවැකිය තහවුරු කළ නොහැක."
+            })
 
+        #get the first matching record
         record = soil_record.iloc[0]
-        # (මෙතන ඔයාගේ කලින් තිබුණු logic එකම දාන්න)
+        ph = float(record['ph_value'])
+        p_val = float(record['phosphorus_value'])
+        k_val = float(record['potassium_value'])
+        om_val = float(record['organic_matter_status'])
 
-        return jsonify({"status": "success", "validation_status": "VALIDATED", "map_color": "GREEN", "recommendation": "සාර්ථකයි."})
+        validation_status = "REJECTED"
+        map_color = "RED"
+        recommendation_text = ""
+
+        if ai_prediction == 'Nitrogen_Deficiency':
+            if om_val < 2.0:
+                validation_status = "VALIDATED"
+                map_color = "GREEN"
+                recommendation_text = f"[VALIDATED] වසමේ පසෙහි කාබනික ද්‍රව්‍ය ඉතා අඩුයි ({om_val}%). AI අනාවැකිය නිවැරදි බැවින් යූරියා (Urea) පොහොර නිර්දේශ කෙරේ."
+            else:
+                recommendation_text = f"[REJECTED] වසමේ පසෙහි කාබනික ද්‍රව්‍ය සතුටුදායකයි ({om_val}%). AI අනාවැකිය වැරදි වීමට ඉඩ ඇත."
+
+        elif ai_prediction == 'Phosphorus_Deficiency':
+            if p_val < 10.0 or ph > 7.5:
+                validation_status = "VALIDATED"
+                map_color = "GREEN"
+                recommendation_text = f"[VALIDATED] වසමේ පසෙහි පොස්පරස් අගය {p_val} mg/kg වේ (pH අගය: {ph}). AI අනාවැකිය නිවැරදි බැවින් TSP යෙදීම නිර්දේශ කෙරේ."
+            else:
+                recommendation_text = f"[REJECTED] වසමේ පසෙහි පොස්පරස් සතුටුදායකයි ({p_val} mg/kg). AI අනාවැකිය වැරදි වීමට ඉඩ ඇත."
+
+        elif ai_prediction == 'Potassium_Deficiency':
+            if k_val < 80.0:
+                validation_status = "VALIDATED"
+                map_color = "GREEN"
+                recommendation_text = f"[VALIDATED] වසමේ පොටෑසියම් මට්ටම ඉතා අඩුයි ({k_val} mg/kg). AI අනාවැකිය නිවැරදි බැවින් MOP පොහොර නිර්දේශ කෙරේ."
+            else:
+                recommendation_text = f"[REJECTED] වසමේ පොටෑසියම් සතුටුදායකයි ({k_val} mg/kg). AI අනාවැකිය වැරදි වීමට ඉඩ ඇත."
+
+        try:
+            if prediction_id:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                query = "UPDATE leaf_analysis SET status = %s, marker_color = %s WHERE id = %s"
+                cursor.execute(query, (validation_status, map_color, prediction_id))
+                conn.commit()
+                cursor.close()
+                conn.close()
+        except Exception as db_err:
+            print(f"Database update error: {db_err}")
+
+        return jsonify({
+            "status": "success", 
+            "validation_status": validation_status, 
+            "map_color": map_color, 
+            "recommendation": recommendation_text
+        })
+
     except Exception as e:
+        print("Validation Error:", e)
         return jsonify({"status":"error", "message":str(e)}), 500
 
 if __name__ == '__main__':

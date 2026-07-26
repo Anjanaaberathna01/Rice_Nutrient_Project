@@ -7,7 +7,7 @@ from rembg import remove
 from PIL import Image
 import io
 
-# 1. පරාමිතීන් සහ මාදිලි Load කිරීම
+# classes load
 IMG_SIZE = (224, 224)
 CLASS_NAMES = [
     'Bacterial_Leaf_Blight', 'Brown_Spot', 'Healthy', 'Leaf_Blast', 
@@ -15,19 +15,19 @@ CLASS_NAMES = [
     'Potassium_Deficiency', 'Sheath_Blight'
 ]
 
-# Indices වෙන් කිරීම
+# Indices
 DEFICIENCY_INDICES = [2, 5, 6, 7] 
 DISEASE_INDICES = [0, 1, 3, 4, 8]  
 
-print("🔄 Models Loading... Please wait.")
-# Softmax Binary Model Load (v2)
+print("Models Loading... Please wait.")
+# Softmax Binary Model Load
 binary_model = tf.keras.models.load_model('models/rice_binary_disease_and_deficiency_v2.h5', compile=False)
 
 # Ensemble Models Load 
 model_mobile = tf.keras.models.load_model('models/rice_multilabel_model_v4_final.h5', compile=False)
 model_dense = tf.keras.models.load_model('models/rice_multilabel_model_densenet121.h5', compile=False)
 model_inception = tf.keras.models.load_model('models/rice_multilabel_model_inceptionv3.h5', compile=False)
-print("✅ All Models Loaded Successfully!")
+print("All Models Loaded Successfully!")
 
 def generate_heatmap_ensemble(img_array, model):
     try:
@@ -46,19 +46,19 @@ def predict_ensemble(image_path):
         print(f"Photo not found: {image_path}")
         return
 
-    # --- 1. Background Removal ---
+    # --- Background Removal ---
     print(f"Preprocessing: {image_path}")
     with open(image_path, 'rb') as i:
         output_data = remove(i.read())
         img_cleaned = Image.open(io.BytesIO(output_data)).convert("RGB")
         img_np = np.array(img_cleaned)
 
-    # --- 2. Preprocessing ---
+    # --- Preprocessing ---
     img_resized = cv2.resize(img_np, IMG_SIZE)
     img_array = np.expand_dims(img_resized, axis=0)
     binary_input = img_array / 255.0
 
-    # --- 3. Binary Softmax Filtering ---
+    # --- Binary Softmax Filtering ---
     bin_preds = binary_model.predict(binary_input, verbose=0)[0]
     deficiency_prob = float(bin_preds[0])
     disease_prob = float(bin_preds[1])
@@ -66,7 +66,7 @@ def predict_ensemble(image_path):
     is_disease = disease_prob > deficiency_prob
     
     # --- Soft-Thresholding Logic ---
-    uncertainty_threshold = 0.15 # 15% ක වෙනස
+    uncertainty_threshold = 0.15
     diff = abs(disease_prob - deficiency_prob)
     is_mixed = diff < uncertainty_threshold
 
@@ -88,7 +88,7 @@ def predict_ensemble(image_path):
         else:
             for idx in DISEASE_INDICES: final_preds[idx] = 0
     else:
-        print("⚠️ මිශ්‍ර ලක්ෂණ පවතින බැවින් සියලුම පන්ති පරීක්ෂා කරයි.")
+        print("මිශ්‍ර ලක්ෂණ පවතින බැවින් සියලුම පන්ති පරීක්ෂා කරයි.")
 
     # --- 6. Visualization ---
     heatmap = generate_heatmap_ensemble(in_d, model_dense)
@@ -115,7 +115,8 @@ def predict_ensemble(image_path):
     top_indices = np.argsort(final_preds)[-3:][::-1]
     top_labels = [CLASS_NAMES[i] for i in top_indices]
     top_scores = [final_preds[i] for i in top_indices]
-    # වර්ණය තීරණය කිරීම (මිශ්‍ර නම් දොඩම් පැහැය)
+
+    # Orange color for mixed
     bar_color = 'orange' if is_mixed else ('red' if is_disease else 'green')
     plt.barh(top_labels, top_scores, color=bar_color)
     plt.title(f"Top Results\n(Conf: {final_preds[top_indices[0]]:.2%})")
@@ -123,7 +124,7 @@ def predict_ensemble(image_path):
     
     plt.tight_layout(); plt.show()
 
-    # --- 7. වාර්තාව ---
+    
     print("\n" + "="*65)
     category_info = "MIXED/UNCERTAIN" if is_mixed else ("DISEASE" if is_disease else "DEFICIENCY")
     print(f"FINAL CATEGORY: {category_info} (Diff: {diff:.1%})")
@@ -135,5 +136,5 @@ def predict_ensemble(image_path):
             print(f"{CLASS_NAMES[i]:<25} | {p_m[i]:.2f} | {p_d[i]:.2f} | {p_i[i]:.2f} | {final_preds[i]:.2%}")
     print("="*65)
 
-# පරීක්ෂා කිරීමට රූපයේ නම මෙතැනට ඇතුළත් කරන්න
+# tets
 predict_ensemble('42.jpeg')

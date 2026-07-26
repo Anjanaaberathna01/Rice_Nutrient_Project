@@ -11,7 +11,6 @@ import seaborn as sns
 from sklearn.utils import class_weight
 from sklearn.metrics import confusion_matrix, classification_report
 
-# 1. සැකසුම් (Settings)
 IMG_SIZE = (224, 224)
 BATCH_SIZE = 32
 METADATA_CSV = 'multi_label_metadata.csv'
@@ -21,13 +20,13 @@ REPORTS_DIR = 'reports/densenet'
 if not os.path.exists(REPORTS_DIR):
     os.makedirs(REPORTS_DIR)
 
-# 2. CSV දත්ත පිරිසැකසුම
+# 2. get CSV 
 df = pd.read_csv(METADATA_CSV)
 df['image_path'] = df['image_path'].str.replace('\\', '/', regex=False)
 df = df.sample(frac=1, random_state=42).reset_index(drop=True)
 classes = sorted(df['label'].unique())
 
-# 3. Data Generators (DenseNet Preprocessing සමඟ)
+# 3. Data Generators 
 datagen = ImageDataGenerator(
     preprocessing_function=preprocess_input,
     rotation_range=15,
@@ -76,7 +75,7 @@ model = models.Model(inputs, outputs)
 model.compile(optimizer=optimizers.Adam(learning_rate=1e-3), 
               loss='categorical_crossentropy', metrics=['accuracy'])
 
-print("\n🚀 DenseNet121: Phase 1 Starting...")
+print("\n DenseNet121: Phase 1 Starting...")
 h1 = model.fit(train_gen, validation_data=val_gen, epochs=10, class_weight=class_weights)
 
 # 7. Phase 2: Fine-Tuning
@@ -114,6 +113,6 @@ def save_reports(h1, h2, model, val_gen):
 
     with open(f'{REPORTS_DIR}/densenet_report.txt', 'w') as f:
         f.write(classification_report(val_gen.classes, preds, target_names=classes))
-    print(f"✅ DenseNet121 Reports saved in {REPORTS_DIR}")
+    print(f"DenseNet121 Reports saved in {REPORTS_DIR}")
 
 save_reports(h1, h2, model, val_gen)

@@ -11,8 +11,7 @@ import seaborn as sns
 from sklearn.utils import class_weight
 from sklearn.metrics import confusion_matrix, classification_report
 
-# 1. සැකසුම් (Settings)
-IMG_SIZE = (224, 224) # InceptionV3 සාමාන්‍යයෙන් 299x299 ගන්නා මුත් Ensemble සඳහා 224x224 භාවිතා කිරීම සුදුසුයි
+IMG_SIZE = (224, 224) 
 BATCH_SIZE = 32
 METADATA_CSV = 'multi_label_metadata.csv'
 DATA_DIR = 'dataset/cleaned_multi_label_dataset'
@@ -21,13 +20,13 @@ REPORTS_DIR = 'reports/inception'
 if not os.path.exists(REPORTS_DIR):
     os.makedirs(REPORTS_DIR)
 
-# 2. CSV දත්ත පිරිසැකසුම (MobileNet කේතයට සමානයි)
+# 2. CSV 
 df = pd.read_csv(METADATA_CSV)
 df['image_path'] = df['image_path'].str.replace('\\', '/', regex=False)
 df = df.sample(frac=1, random_state=42).reset_index(drop=True)
 classes = sorted(df['label'].unique())
 
-# 3. Data Generators (InceptionV3 Preprocessing සමඟ)
+# 3. Data Generators 
 datagen = ImageDataGenerator(
     preprocessing_function=preprocess_input,
     rotation_range=15,

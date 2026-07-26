@@ -116,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _lat = position.latitude;
       _lng = position.longitude;
 
-      var uri = Uri.parse('http://192.168.8.163:5000/predict');
+      var uri = Uri.parse('http://192.168.1.102:5000/predict');
       var request = http.MultipartRequest('POST', uri);
 
       request.files.add(
@@ -171,39 +171,40 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _showLocationSearchDialog() {
-    final TextEditingController dsController = TextEditingController();
-    final TextEditingController gnController = TextEditingController();
+void _showLocationSearchDialog() {
+    // 💡 අලුත් Controllers හදන්නේ නෑ, අපි Autocomplete එකෙන් දෙන ඒව මේකට දාගන්නවා
+    TextEditingController? dsFieldController;
+    TextEditingController? gnFieldController;
     String activeDS = '';
 
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text("ප්‍රදේශය ඇතුළත් කරන්න (Type to Search)"),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Autocomplete<String>(
-                  optionsBuilder: (TextEditingValue textEditingValue) {
-                    if (textEditingValue.text.isEmpty){
-                      return const Iterable<String>.empty();
-                    }
-                    return _dsDivisions.where(
-                      (String option) =>
-                          option.contains(textEditingValue.text.toLowerCase()),
-                    );
-                  },
-                  onSelected: (String selection) {
-                    setState(() {
-                      activeDS = selection;
-                    });
-
-                    dsController.text = selection;
-                  },
-                  fieldViewBuilder:
-                      (context, controller, focusNode, onFieldSubmitted) {
+        // 💡 Dialog එක ඇතුළේ activeDS අප්ඩේට් වෙන්න StatefulBuilder එකක් අනිවාර්යයි
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text("ප්‍රදේශය ඇතුළත් කරන්න (Type to Search)"),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Autocomplete<String>(
+                      optionsBuilder: (TextEditingValue textEditingValue) {
+                        if (textEditingValue.text.isEmpty) {
+                          return const Iterable<String>.empty();
+                        }
+                        return _dsDivisions.where(
+                          (String option) => option.contains(textEditingValue.text.toLowerCase()),
+                        );
+                      },
+                      onSelected: (String selection) {
+                        setDialogState(() {
+                          activeDS = selection; // දැන් GN dropdown එකට මේක යාවත්කාලීන වෙනවා
+                        });
+                      },
+                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                        dsFieldController = controller; // 🔥 TextField එකේ සැබෑ Controller එක අල්ලගන්නවා
                         return TextField(
                           controller: controller,
                           focusNode: focusNode,
@@ -213,22 +214,23 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         );
                       },
-                ),
-                const SizedBox(height: 15),
-                Autocomplete<String>(
-                  optionsBuilder: (TextEditingValue textEditingValue) {
-                    if (textEditingValue.text.isEmpty || activeDS.isEmpty)
-                      return const Iterable<String>.empty();
-                    return _gnDivisions[activeDS]!.where(
-                      (String option) =>
-                          option.contains(textEditingValue.text.toLowerCase()),
-                    );
-                  },
-                  onSelected: (String selection) {
-                    gnController.text = selection;
-                  },
-                  fieldViewBuilder:
-                      (context, controller, focusNode, onFieldSubmitted) {
+                    ),
+                    const SizedBox(height: 15),
+                    Autocomplete<String>(
+                      optionsBuilder: (TextEditingValue textEditingValue) {
+                        if (textEditingValue.text.isEmpty || activeDS.isEmpty) {
+                           return const Iterable<String>.empty();
+                        }
+                        // 💡 Null safety එක එක්ක දාමු, නැත්නම් ඇප් එක ක්‍රෑෂ් වෙන්න පුළුවන්
+                        return _gnDivisions[activeDS]?.where(
+                          (String option) => option.contains(textEditingValue.text.toLowerCase()),
+                        ) ?? const Iterable<String>.empty();
+                      },
+                      onSelected: (String selection) {
+                        // මෙතන අමුතුවෙන් Text එක සෙට් කරන්න ඕනේ නෑ, Controller එක ඒක බලාගන්නවා
+                      },
+                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                        gnFieldController = controller; // 🔥 GN එකේ සැබෑ Controller එක අල්ලගන්නවා
                         return TextField(
                           controller: controller,
                           focusNode: focusNode,
@@ -238,32 +240,37 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         );
                       },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    // 🔥 දැන් User Dropdown එකෙන් Click කරත්, නිකන් Type කරත් Text එක හරියටම එනවා
+                    String finalDS = dsFieldController?.text.trim() ?? '';
+                    String finalGN = gnFieldController?.text.trim() ?? '';
+
+                    if (finalDS.isNotEmpty && finalGN.isNotEmpty && _currentPredictionId != null) {
+                      Navigator.pop(context);
+                      _fetchFertilizerRecommendation(
+                        _currentPredictionId!,
+                        finalDS, // හරියටම ටයිප් කරපු DS එක
+                        finalGN, // හරියටම ටයිප් කරපු GN එක
+                        _rawPredictionClass!,
+                        _rawCategory!,
+                      );
+                    }
+                  },
+                  child: const Text("Validate & View Advice"),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (gnController.text.isNotEmpty &&
-                    _currentPredictionId != null) {
-                  Navigator.pop(context);
-                  _fetchFertilizerRecommendation(
-                    _currentPredictionId!,
-                    dsController.text.trim(),
-                    gnController.text.trim(),
-                    _rawPredictionClass!,
-                    _rawCategory!,
-                  );
-                }
-              },
-              child: const Text("Validate & View Advice"),
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -282,7 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       var uri = Uri.parse(
-        'http://192.168.8.163:5000/validate_and_recommend_fertilizer',
+        'http://192.168.1.102:5000/validate_and_recommend_fertilizer',
       );
 
       var response = await http.post(

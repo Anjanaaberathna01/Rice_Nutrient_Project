@@ -40,7 +40,7 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _fetchLatestLocation() async {
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.8.163:5000/get_latest_location'),
+        Uri.parse('http://192.168.1.102:5000/get_latest_location'),
       );
 
       if (response.statusCode == 200) {
@@ -60,8 +60,7 @@ class _MapScreenState extends State<MapScreen> {
           double lng = double.parse(item['longitude'].toString());
 
           LatLng position = LatLng(lat, lng);
-
-          latestPosition = position;
+          latestPosition ??= position;
 
           newMarkers.add(
             Marker(
@@ -77,7 +76,7 @@ class _MapScreenState extends State<MapScreen> {
                 title: item['prediction'] ?? "Unknown",
 
                 snippet:
-                    "Status : ${item['status']}\n"
+                    "Status : ${item['status']}\n" 
                     "Category : ${item['category']}\n"
                     "Confidence : "
                     "${((double.tryParse(item['confidence'].toString()) ?? 0) * 100).toStringAsFixed(1)}%",

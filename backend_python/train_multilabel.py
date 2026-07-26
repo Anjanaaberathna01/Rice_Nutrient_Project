@@ -27,14 +27,14 @@ df['image_path'] = df['image_path'].str.replace('\\', '/', regex=False)
 df = df.sample(frac=1, random_state=42).reset_index(drop=True)
 
 classes = sorted(df['label'].unique())
-print(f"✅ පන්ති 9 හඳුනාගත්තා: {classes}")
+print(f"පන්ති 9 හඳුනාගත්තා: {classes}")
 
-# 3. Data Generators (Cleaned නිසා Augmentation සරල කර ඇත)
+# 3. Data Generators 
 datagen = ImageDataGenerator(
     preprocessing_function=preprocess_input,
     rotation_range=15,
     horizontal_flip=True,
-    validation_split=0.2 # 20% ක් පරීක්ෂණ සඳහා
+    validation_split=0.2 
 )
 
 train_gen = datagen.flow_from_dataframe(
@@ -49,12 +49,12 @@ val_gen = datagen.flow_from_dataframe(
     subset='validation', shuffle=False
 )
 
-# 4. Class Weights (N,P,K ඌණතාවයන්ට වැඩි බරක් දීමට)
+# 4. Class Weights 
 labels = train_gen.classes
 weights = class_weight.compute_class_weight('balanced', classes=np.unique(labels), y=labels)
 class_weights = dict(enumerate(weights))
 
-# 5. Model Building (Attention Mechanism සමඟ)
+# 5. Model Building 
 base_model = MobileNetV2(input_shape=(224, 224, 3), include_top=False, weights='imagenet')
 base_model.trainable = False 
 
@@ -62,7 +62,7 @@ inputs = layers.Input(shape=(224, 224, 3))
 x = base_model(inputs)
 x = layers.GlobalAveragePooling2D()(x)
 
-# Squeeze-and-Excitation (SE) Block - වර්ණ ලක්ෂණ වලට වැඩි අවධානයක් දීමට
+# Squeeze-and-Excitation (SE) Block -
 se = layers.Dense(x.shape[-1] // 16, activation='relu')(x)
 se = layers.Dense(x.shape[-1], activation='sigmoid')(se)
 x = layers.Multiply()([x, se])
@@ -78,26 +78,26 @@ model = models.Model(inputs, outputs)
 model.compile(optimizer=optimizers.Adam(learning_rate=1e-3), 
               loss='categorical_crossentropy', metrics=['accuracy'])
 
-print("\n🚀 Phase 1 ආරම්භ වේ (Top Layers Training)...")
+print("\nPhase 1 ආරම්භ වේ (Top Layers Training)...")
 h1 = model.fit(train_gen, validation_data=val_gen, epochs=10, class_weight=class_weights)
 
 # 7. Phase 2: Fine-Tuning
 base_model.trainable = True
-for layer in base_model.layers[:-50]: layer.trainable = False # අන්තිම ලේයර් 50 පමණක් Open කිරීම
+for layer in base_model.layers[:-50]: layer.trainable = False 
 
 lr_callback = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=1e-7)
 
 model.compile(optimizer=optimizers.Adam(learning_rate=1e-5), 
               loss='categorical_crossentropy', metrics=['accuracy'])
 
-print("\n🔥 Phase 2 ආරම්භ වේ (Fine-tuning for High Accuracy)...")
+print("\n Phase 2 ආරම්භ වේ (Fine-tuning for High Accuracy)...")
 h2 = model.fit(train_gen, validation_data=val_gen, epochs=20, 
               class_weight=class_weights, callbacks=[lr_callback])
 
 # 8. Saving Model
 model.save('models/rice_multilabel_model_v4_final.h5')
 
-# 9. වාර්තා (Reports) සකස් කිරීම
+# 9. report
 def save_reports(h1, h2, model, val_gen):
     # Accuracy & Loss Curves
     acc = h1.history['accuracy'] + h2.history['accuracy']
@@ -120,6 +120,6 @@ def save_reports(h1, h2, model, val_gen):
     with open(f'{REPORTS_DIR}/v4_report.txt', 'w') as f:
         f.write(classification_report(val_gen.classes, preds, target_names=classes))
 
-    print(f"✅ සියලුම වාර්තා {REPORTS_DIR} ෆෝල්ඩරයේ සේව් කරන ලදී.")
+    print(f"සියලුම වාර්තා {REPORTS_DIR} ෆෝල්ඩරයේ සේව් කරන ලදී.")
 
 save_reports(h1, h2, model, val_gen)
