@@ -215,7 +215,7 @@ def validate_and_recommend_fertilizer():
                 map_color = "GREEN"
                 recommendation_text = f"[VALIDATED] වසමේ පසෙහි කාබනික ද්‍රව්‍ය ඉතා අඩුයි ({om_val}%). AI අනාවැකිය නිවැරදි බැවින් යූරියා (Urea) පොහොර නිර්දේශ කෙරේ."
             else:
-                recommendation_text = f"[REJECTED] වසමේ පසෙහි කාබනික ද්‍රව්‍ය සතුටුදායකයි ({om_val}%). AI අනාවැකිය වැරදි වීමට ඉඩ ඇත."
+                recommendation_text = f"[REJECTED] වසමේ පසෙහි කාබනික ද්‍රව්‍ය සතුටුදායකයි ({om_val}%). AI අනාවැකිය සහ ඔබගේ ග්‍රාමසේවා වසමට අදාළ පස් වාර්තාවන් පරස්පරතාවයක් ඇත."
 
         elif ai_prediction == 'Phosphorus_Deficiency':
             if p_val < 10.0 or ph > 7.5:
@@ -223,7 +223,7 @@ def validate_and_recommend_fertilizer():
                 map_color = "GREEN"
                 recommendation_text = f"[VALIDATED] වසමේ පසෙහි පොස්පරස් අගය {p_val} mg/kg වේ (pH අගය: {ph}). AI අනාවැකිය නිවැරදි බැවින් TSP යෙදීම නිර්දේශ කෙරේ."
             else:
-                recommendation_text = f"[REJECTED] වසමේ පසෙහි පොස්පරස් සතුටුදායකයි ({p_val} mg/kg). AI අනාවැකිය වැරදි වීමට ඉඩ ඇත."
+                recommendation_text = f"[REJECTED] වසමේ පසෙහි පොස්පරස් සතුටුදායකයි ({p_val} mg/kg). AI අනාවැකිය සහ ඔබගේ ග්‍රාමසේවා වසමට අදාළ පස් වාර්තාවන් පරස්පරතාවයක් ඇත."
 
         elif ai_prediction == 'Potassium_Deficiency':
             if k_val < 80.0:
@@ -231,7 +231,7 @@ def validate_and_recommend_fertilizer():
                 map_color = "GREEN"
                 recommendation_text = f"[VALIDATED] වසමේ පොටෑසියම් මට්ටම ඉතා අඩුයි ({k_val} mg/kg). AI අනාවැකිය නිවැරදි බැවින් MOP පොහොර නිර්දේශ කෙරේ."
             else:
-                recommendation_text = f"[REJECTED] වසමේ පොටෑසියම් සතුටුදායකයි ({k_val} mg/kg). AI අනාවැකිය වැරදි වීමට ඉඩ ඇත."
+                recommendation_text = f"[REJECTED] වසමේ පොටෑසියම් සතුටුදායකයි ({k_val} mg/kg). AI අනාවැකිය සහ ඔබගේ ග්‍රාමසේවා වසමට අදාළ පස් වාර්තාවන් පරස්පරතාවයක් ඇත."
 
         try:
             if prediction_id:
@@ -255,6 +255,61 @@ def validate_and_recommend_fertilizer():
     except Exception as e:
         print("Validation Error:", e)
         return jsonify({"status":"error", "message":str(e)}), 500
+    # =========================================================
+# 💡 CSV File CRUD Operations for React Admin Dashboard
+# =========================================================
+
+@app.route('/api/soil', methods=['GET'])
+def get_soil_data():
+    try:
+        df = pd.read_csv(CSV_PATH)
+        df['id'] = df.index # React එකට අඳුරගන්න index එක id එක විදිහට යවනවා
+        return jsonify(df.to_dict(orient='records'))
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/soil', methods=['POST'])
+def add_soil_data():
+    try:
+        data = request.json
+        df = pd.read_csv(CSV_PATH)
+        new_row = pd.DataFrame([data])
+        # CSV එකේ තියෙන අනිත් තීරුවලට හිස් නම් 0 දානවා
+        for col in df.columns:
+            if col not in new_row.columns:
+                new_row[col] = 0
+        df = pd.concat([df, new_row], ignore_index=True)
+        df.to_csv(CSV_PATH, index=False)
+        return jsonify({"status": "success", "message": "Data added successfully!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/soil/<int:row_id>', methods=['PUT'])
+def update_soil_data(row_id):
+    try:
+        data = request.json
+        df = pd.read_csv(CSV_PATH)
+        if 0 <= row_id < len(df):
+            for key, value in data.items():
+                if key in df.columns:
+                    df.at[row_id, key] = value
+            df.to_csv(CSV_PATH, index=False)
+            return jsonify({"status": "success", "message": "Data updated successfully!"})
+        return jsonify({"status": "error", "message": "Row not found"}), 404
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/soil/<int:row_id>', methods=['DELETE'])
+def delete_soil_data(row_id):
+    try:
+        df = pd.read_csv(CSV_PATH)
+        if 0 <= row_id < len(df):
+            df = df.drop(row_id).reset_index(drop=True)
+            df.to_csv(CSV_PATH, index=False)
+            return jsonify({"status": "success", "message": "Data deleted successfully!"})
+        return jsonify({"status": "error", "message": "Row not found"}), 404
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

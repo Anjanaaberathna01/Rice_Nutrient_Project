@@ -3,6 +3,9 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:gal/gal.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image/image.dart' as img;
 import 'map_screen.dart';
@@ -171,8 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-void _showLocationSearchDialog() {
-    // 💡 අලුත් Controllers හදන්නේ නෑ, අපි Autocomplete එකෙන් දෙන ඒව මේකට දාගන්නවා
+  void _showLocationSearchDialog() {
     TextEditingController? dsFieldController;
     TextEditingController? gnFieldController;
     String activeDS = '';
@@ -180,7 +182,6 @@ void _showLocationSearchDialog() {
     showDialog(
       context: context,
       builder: (context) {
-        // 💡 Dialog එක ඇතුළේ activeDS අප්ඩේට් වෙන්න StatefulBuilder එකක් අනිවාර්යයි
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -200,11 +201,11 @@ void _showLocationSearchDialog() {
                       },
                       onSelected: (String selection) {
                         setDialogState(() {
-                          activeDS = selection; // දැන් GN dropdown එකට මේක යාවත්කාලීන වෙනවා
+                          activeDS = selection; 
                         });
                       },
                       fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                        dsFieldController = controller; // 🔥 TextField එකේ සැබෑ Controller එක අල්ලගන්නවා
+                        dsFieldController = controller; 
                         return TextField(
                           controller: controller,
                           focusNode: focusNode,
@@ -221,16 +222,13 @@ void _showLocationSearchDialog() {
                         if (textEditingValue.text.isEmpty || activeDS.isEmpty) {
                            return const Iterable<String>.empty();
                         }
-                        // 💡 Null safety එක එක්ක දාමු, නැත්නම් ඇප් එක ක්‍රෑෂ් වෙන්න පුළුවන්
                         return _gnDivisions[activeDS]?.where(
                           (String option) => option.contains(textEditingValue.text.toLowerCase()),
                         ) ?? const Iterable<String>.empty();
                       },
-                      onSelected: (String selection) {
-                        // මෙතන අමුතුවෙන් Text එක සෙට් කරන්න ඕනේ නෑ, Controller එක ඒක බලාගන්නවා
-                      },
+                      onSelected: (String selection) {},
                       fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                        gnFieldController = controller; // 🔥 GN එකේ සැබෑ Controller එක අල්ලගන්නවා
+                        gnFieldController = controller; 
                         return TextField(
                           controller: controller,
                           focusNode: focusNode,
@@ -251,7 +249,6 @@ void _showLocationSearchDialog() {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    // 🔥 දැන් User Dropdown එකෙන් Click කරත්, නිකන් Type කරත් Text එක හරියටම එනවා
                     String finalDS = dsFieldController?.text.trim() ?? '';
                     String finalGN = gnFieldController?.text.trim() ?? '';
 
@@ -259,8 +256,8 @@ void _showLocationSearchDialog() {
                       Navigator.pop(context);
                       _fetchFertilizerRecommendation(
                         _currentPredictionId!,
-                        finalDS, // හරියටම ටයිප් කරපු DS එක
-                        finalGN, // හරියටම ටයිප් කරපු GN එක
+                        finalDS, 
+                        finalGN, 
                         _rawPredictionClass!,
                         _rawCategory!,
                       );
@@ -297,13 +294,9 @@ void _showLocationSearchDialog() {
         headers: {"Content-Type": "application/json"},
         body: json.encode({
           "prediction_id": predId,
-
           "ds_division": ds,
-
           "gn_division": gn,
-
           "prediction": predClass,
-
           "category": cat,
         }),
       );
@@ -314,8 +307,6 @@ void _showLocationSearchDialog() {
         setState(() {
           _isLoading = false;
         });
-
-        // recommendation dialog
 
         _showFertilizerResultDialog(
           resData['recommendation'] ?? "No recommendation found",
@@ -377,6 +368,46 @@ void _showLocationSearchDialog() {
     );
   }
 
+  // 💡 Heatmap එක Download කරන Function එක (ඔයාගේ අලුත් කෑල්ල)
+ // 💡 අලුත් Gal Package එකෙන් Heatmap එක Download කරන Function එක
+  Future<void> _downloadHeatmap() async {
+    if (_heatmapBase64 == null) return;
+    
+    // Storage Permission ඉල්ලීම
+    var status = await Permission.storage.request();
+    if (!status.isGranted) {
+      status = await Permission.photos.request();
+    }
+    
+    if (status.isGranted) {
+      try {
+        Uint8List imageBytes = base64Decode(_heatmapBase64!);
+        
+        // අලුත් 'gal' package එකෙන් කෙළින්ම bytes සේව් කිරීම
+        await Gal.putImageBytes(imageBytes);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Heatmap Downloaded Successfully! ✅'), backgroundColor: Colors.green),
+          );
+        }
+      } catch (e) {
+        print("Error saving image: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to save image. ❌'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Storage Permission Denied! ⚠️')),
+        );
+      }
+    }
+  }
+  // 💡 Update කරපු Heatmap Dialog එක 
   void _showHeatmapDialog() {
     showDialog(
       context: context,
@@ -420,6 +451,15 @@ void _showLocationSearchDialog() {
           ),
         ),
         actions: [
+          // 💡 මෙතනට Download Button එක එකතු කළා
+          TextButton.icon(
+            onPressed: () {
+              _downloadHeatmap();
+              Navigator.pop(context); // Download එක එබුවම Popup එක වැහෙනවා
+            },
+            icon: const Icon(Icons.download),
+            label: const Text("Download"),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text("Close"),
@@ -528,7 +568,7 @@ void _showLocationSearchDialog() {
                           ),
                         ),
                       const SizedBox(height: 12),
-                      // 💡 Healthy නොවන ඕනෑම අවස්ථාවක (ඌණතා සහ රෝග දෙකටම) බටන් එක පෙන්වයි bn
+                      
                       if (_currentPredictionId != null &&
                           _rawPredictionClass != 'Healthy')
                         ElevatedButton.icon(
@@ -545,6 +585,28 @@ void _showLocationSearchDialog() {
                           ),
                         ),
                       const SizedBox(height: 12),
+                      
+                      // 💡 Popup එක වැහුවට පස්සේ ඕන වෙලාවක ආයෙත් Heatmap එක බලාගන්න මේ Button එක දැම්මා.
+                      if (_heatmapBase64 != null)
+                        Column(
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: _showHeatmapDialog,
+                              icon: const Icon(Icons.wb_sunny_outlined),
+                              label: const Text("View Heatmap Again"),
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size(260, 50),
+                                backgroundColor: Colors.teal[600],
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                        ),
+
                       ElevatedButton.icon(
                         onPressed: () {
                           Navigator.push(
