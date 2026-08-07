@@ -12,12 +12,17 @@ function App() {
   // 💡 CSV Data States
   const [soilData, setSoilData] = useState([]);
   const [formData, setFormData] = useState({
-    ds_division: "", gn_division: "", ph_value: "", phosphorus_value: "", potassium_value: "", organic_matter_status: ""
+    ds_division: "", 
+    gn_division: "", 
+    ph_value: "", 
+    phosphorus_value: "", 
+    potassium_value: "", 
+    organic_matter_status: ""
   });
   const [editingId, setEditingId] = useState(null);
 
   // Flask IP එක
-  const API_URL = "http://192.168.1.102:5000";
+  const API_URL = "http://192.168.8.229:5000";
 
   useEffect(() => {
     fetchLocations();
@@ -128,7 +133,7 @@ function App() {
         textAlign: "center",
         boxShadow: "0 4px 6px rgba(0,0,0,0.1)"
       }}>
-        <h1 style={{ margin: 0, fontSize: "42px", letterSpacing: "1px" }}>🌾 Precision Agriculture System</h1>
+        <h1 style={{ margin: 0, fontSize: "42px", letterSpacing: "1px" }}>Precision Agriculture System</h1>
         <p style={{ marginTop: "10px", fontSize: "18px", opacity: 0.9 }}>Admin Dashboard: Real-time Triangulation & Soil Analytics</p>
       </div>
 

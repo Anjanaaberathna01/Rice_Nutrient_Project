@@ -119,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _lat = position.latitude;
       _lng = position.longitude;
 
-      var uri = Uri.parse('http://192.168.1.102:5000/predict');
+      var uri = Uri.parse('http://192.168.8.229:5000/predict');
       var request = http.MultipartRequest('POST', uri);
 
       request.files.add(
@@ -286,7 +286,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       var uri = Uri.parse(
-        'http://192.168.1.102:5000/validate_and_recommend_fertilizer',
+        'http://192.168.8.229:5000/validate_and_recommend_fertilizer',
       );
 
       var response = await http.post(
