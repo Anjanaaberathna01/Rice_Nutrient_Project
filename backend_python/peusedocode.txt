@@ -1,0 +1,46 @@
+# Algorithm: Multi-Stage Cascading & Weighted Ensemble Prediction Pipeline
+Input: Raw Image File, GPS Coordinates (lat, lng), User GN & DS Divisions
+Output: Validated Prediction Status, Map Color Marker, Recommendation & Grad-CAM Heatmap
+
+1. def predict_and_validate_crop_stress():
+2.     # Step 1: Ingest image and execute automated background removal
+3.     clean_raw = rembg.remove(image_bytes)
+4.     img_np = convert_to_numpy_array(clean_raw, target_size=(224, 224))
+5.     
+6.     # Step 2: Binary Domain Verification (Rice vs Non-Rice)
+7.     is_rice_score = RICE_VS_NONRICE_MODEL.predict(img_np)
+8.     if is_rice_score < 0.85:
+9.         return "Error: මෙය වී පත්‍රයක් නොවේ (Invalid Asset)."
+10.    
+11.    # Step 3: Stressor Segmentation (Disease vs Deficiency)
+12.    disease_prob, deficiency_prob = DISEASE_VS_DEFICIENCY_MODEL.predict(img_np)
+13.    
+14.    # Step 4: Core Deep Learning Ensemble Classification (Soft-Voting Matrix)
+15.    p_eff = MODEL_EFFICIENT.predict(img_np)
+16.    p_d = MODEL_DENSE.predict(img_np)
+17.    p_i = MODEL_INCEPTION.predict(img_np)
+18.    
+19.    # Weighted aggregation (EfficientNet: 0.2, DenseNet: 0.4, InceptionV3: 0.4)
+20.    final_preds = (p_eff * 0.2) + (p_d * 0.4) + (p_i * 0.4)
+21.    
+22.    # Filter classes based on stressor type (Disease vs Deficiency indices)
+23.    if is_disease:
+24.        zero_out_deficiencies(final_preds)
+25.    else:
+26.        zero_out_diseases(final_preds)
+27.        
+28.    predicted_class, confidence = get_argmax_prediction(final_preds)
+29.    
+30.    # Step 5: Context-Aware Geospatial, Soil & Weather Triangulation
+31.    soil_record = query_csv_database(CSV_PATH, user_gn, user_ds)
+32.    recent_rainfall, is_drought = get_realtime_weather(lat, lng)
+33.    
+34.    validation_status, map_color, recommendation = validate_rules(
+35.        predicted_class, soil_record, recent_rainfall, is_drought
+36.    )
+37.    
+38.    # Step 6: Persist to MySQL and Return Response with Heatmap
+39.    prediction_id = save_to_db(predicted_class, category_label, confidence, lat, lng)
+40.    update_db_status(prediction_id, validation_status, map_color)
+41.    
+42.    return generate_json_response(prediction_id, validation_status, map_color, recommendation)

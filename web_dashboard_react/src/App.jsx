@@ -5,31 +5,44 @@ import "leaflet/dist/leaflet.css";
 import "./App.css";
 
 function App() {
-  // 💡 Map States
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 💡 CSV Data States
   const [soilData, setSoilData] = useState([]);
   const [formData, setFormData] = useState({
-    ds_division: "", 
-    gn_division: "", 
-    ph_value: "", 
-    phosphorus_value: "", 
-    potassium_value: "", 
+    ds_division: "",
+    gn_division: "",
+    ph_value: "",
+    ec_value: "",
+    phosphorus_value: "",
+    potassium_value: "",
     organic_matter_status: ""
   });
+
   const [editingId, setEditingId] = useState(null);
 
-  // Flask IP එක
-  const API_URL = "http://192.168.8.229:5000";
+  const [rulesData, setRulesData] = useState([]);
+  const [ruleForm, setRuleForm] = useState({
+    irrigation_type: "Irrigated",
+    crop_age_months: 3.5,
+    nutrient: "N",
+    soil_level_min: 0,
+    soil_level_max: 999,
+    stage: "Week_2",
+    fertilizer_name: "Urea",
+    amount_kg_acre: 20
+  });
+
+  const [editingRuleId, setEditingRuleId] = useState(null);
+
+  const API_URL = "http://192.168.1.103:5000";
 
   useEffect(() => {
     fetchLocations();
     fetchSoilData();
+    fetchRulesData();
   }, []);
 
-  // --- API Functions ---
   const fetchLocations = async () => {
     try {
       const response = await axios.get(`${API_URL}/get_latest_location`);
@@ -50,200 +63,1550 @@ function App() {
     }
   };
 
-  // --- Map Logic ---
-  const getMarkerColor = (colorCode) => {
-    switch (colorCode) {
-      case "GREEN": return "#28a745";
-      case "RED": return "#dc3545";
-      case "ORANGE": default: return "#fd7e14";
+  const fetchRulesData = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/rules`);
+      setRulesData(res.data);
+    } catch (error) {
+      console.error("Error fetching rules data:", error);
     }
   };
 
-  const diseases = locations.filter((loc) => loc.category === "Disease");
-  const deficiencies = locations.filter((loc) => loc.category === "Deficiency");
-  const defGreen = deficiencies.filter((loc) => loc.marker_color === "GREEN");
-  const defRed = deficiencies.filter((loc) => loc.marker_color === "RED");
-  const defOrange = deficiencies.filter((loc) => loc.marker_color === "ORANGE" || !loc.marker_color);
+  const getMarkerColor = (colorCode) => {
+    switch (colorCode) {
+      case "GREEN":
+        return "#28a745";
+      case "RED":
+        return "#dc3545";
+      case "ORANGE":
+      default:
+        return "#fd7e14";
+    }
+  };
+
+  const diseases = locations.filter(
+    (loc) => loc.category === "Disease"
+  );
+
+  const deficiencies = locations.filter(
+    (loc) => loc.category === "Deficiency"
+  );
+
+  const defGreen = deficiencies.filter(
+    (loc) => loc.marker_color === "GREEN"
+  );
+
+  const defRed = deficiencies.filter(
+    (loc) => loc.marker_color === "RED"
+  );
+
+  const defOrange = deficiencies.filter(
+    (loc) =>
+      loc.marker_color === "ORANGE" || !loc.marker_color
+  );
 
   const RecordCard = ({ loc }) => (
-    <div style={{
-      borderLeft: `5px solid ${getMarkerColor(loc.marker_color)}`,
-      borderRadius: "6px", padding: "10px", marginBottom: "10px", backgroundColor: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
-    }}>
-      <div style={{ fontWeight: "bold", fontSize: "14px", color: "#333" }}>{loc.prediction}</div>
-      <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>Status: <b>{loc.status}</b></div>
-      <div style={{ fontSize: "12px", color: "#666" }}>Confidence: {(parseFloat(loc.confidence) * 100).toFixed(1)}%</div>
+    <div
+      className="record-card"
+      style={{
+        borderLeftColor: getMarkerColor(loc.marker_color)
+      }}
+    >
+      <div className="record-title">
+        {loc.prediction}
+      </div>
+
+      <div className="record-meta">
+        Status: <b>{loc.status}</b>
+      </div>
+
+      <div className="record-meta">
+        Confidence:{" "}
+        {(parseFloat(loc.confidence) * 100).toFixed(1)}%
+      </div>
     </div>
   );
 
-  // --- CSV CRUD Logic ---
+  // =========================
+  // SOIL DATA CRUD
+  // =========================
+
   const handleFormChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
   };
 
   const handleCsvSubmit = async (e) => {
     e.preventDefault();
+
     try {
       if (editingId !== null) {
-        await axios.put(`${API_URL}/api/soil/${editingId}`, formData);
-        alert("Soil record updated successfully! ✅");
+        await axios.put(
+          `${API_URL}/api/soil/${editingId}`,
+          formData
+        );
+
+        alert("Soil record updated successfully!");
       } else {
-        await axios.post(`${API_URL}/api/soil`, formData);
-        alert("New soil record added successfully! ✅");
+        await axios.post(
+          `${API_URL}/api/soil`,
+          formData
+        );
+
+        alert("New soil record added successfully!");
       }
-      setFormData({ ds_division: "", gn_division: "", ph_value: "", phosphorus_value: "", potassium_value: "", organic_matter_status: "" });
+
+      setFormData({
+        ds_division: "",
+        gn_division: "",
+        ph_value: "",
+        ec_value: "",
+        phosphorus_value: "",
+        potassium_value: "",
+        organic_matter_status: ""
+      });
+
       setEditingId(null);
       fetchSoilData();
+
     } catch (error) {
-      console.error("Error saving CSV data:", error);
+      console.error("Error saving soil data:", error);
       alert("Error processing your request.");
     }
   };
 
   const editRow = (row) => {
     setFormData({
-      ds_division: row.ds_division, gn_division: row.gn_division, ph_value: row.ph_value, 
-      phosphorus_value: row.phosphorus_value, potassium_value: row.potassium_value, organic_matter_status: row.organic_matter_status
+      ds_division: row.ds_division,
+      gn_division: row.gn_division,
+      ph_value: row.ph_value,
+      ec_value: row.ec_value,
+      phosphorus_value: row.phosphorus_value,
+      potassium_value: row.potassium_value,
+      organic_matter_status: row.organic_matter_status
     });
+
     setEditingId(row.id);
-    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); // පහළට යනවා ඔටෝමැටික්
+
+    window.scrollTo({
+      top: document.body.scrollHeight / 2,
+      behavior: "smooth"
+    });
   };
 
   const deleteRow = async (id) => {
-    if (window.confirm("Are you sure you want to delete this soil record? ❌")) {
+    if (
+      window.confirm(
+        "Are you sure you want to delete this soil record?"
+      )
+    ) {
       try {
-        await axios.delete(`${API_URL}/api/soil/${id}`);
+        await axios.delete(
+          `${API_URL}/api/soil/${id}`
+        );
+
         fetchSoilData();
+
       } catch (error) {
-        console.error("Error deleting data:", error);
+        console.error(
+          "Error deleting soil data:",
+          error
+        );
+      }
+    }
+  };
+
+  // =========================
+  // FERTILIZER RULE CRUD
+  // =========================
+
+  const handleRuleChange = (e) => {
+    setRuleForm({
+      ...ruleForm,
+      [e.target.name]: e.target.value
+    });
+  };
+
+  const handleRuleSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      if (editingRuleId !== null) {
+        await axios.put(
+          `${API_URL}/api/rules/${editingRuleId}`,
+          ruleForm
+        );
+
+        alert("Fertilizer rule updated successfully!");
+      } else {
+        await axios.post(
+          `${API_URL}/api/rules`,
+          ruleForm
+        );
+
+        alert("New fertilizer rule added successfully!");
+      }
+
+      setEditingRuleId(null);
+      fetchRulesData();
+
+    } catch (error) {
+      console.error(
+        "Error saving rule data:",
+        error
+      );
+
+      alert("Error processing rule.");
+    }
+  };
+
+  const editRuleRow = (row) => {
+    setRuleForm({
+      irrigation_type: row.irrigation_type,
+      crop_age_months: row.crop_age_months,
+      nutrient: row.nutrient,
+      soil_level_min: row.soil_level_min,
+      soil_level_max: row.soil_level_max,
+      stage: row.stage,
+      fertilizer_name: row.fertilizer_name,
+      amount_kg_acre: row.amount_kg_acre
+    });
+
+    setEditingRuleId(row.id);
+  };
+
+  const deleteRuleRow = async (id) => {
+    if (
+      window.confirm(
+        "Are you sure you want to delete this fertilizer rule?"
+      )
+    ) {
+      try {
+        await axios.delete(
+          `${API_URL}/api/rules/${id}`
+        );
+
+        fetchRulesData();
+
+      } catch (error) {
+        console.error(
+          "Error deleting rule:",
+          error
+        );
       }
     }
   };
 
   return (
-    <div style={{ fontFamily: "sans-serif", backgroundColor: "#f4f7f6", minHeight: "100vh", paddingBottom: "50px" }}>
-      
-      {/* 1. HEADER SECTION (Background Image) */}
-      <div style={{ 
-        backgroundImage: 'linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url("/rice_bg.jpg")', 
-        backgroundSize: "cover", 
-        backgroundPosition: "center", 
-        color: "white", 
-        padding: "60px 20px", 
-        textAlign: "center",
-        boxShadow: "0 4px 6px rgba(0,0,0,0.1)"
-      }}>
-        <h1 style={{ margin: 0, fontSize: "42px", letterSpacing: "1px" }}>Precision Agriculture System</h1>
-        <p style={{ marginTop: "10px", fontSize: "18px", opacity: 0.9 }}>Admin Dashboard: Real-time Triangulation & Soil Analytics</p>
-      </div>
+    <div className="admin-page">
 
-      <div style={{ padding: "30px", maxWidth: "1400px", margin: "0 auto" }}>
-        
-        {/* 2. DASHBOARD SECTION (Map + Sidebar) */}
-        <div style={{ backgroundColor: "#fff", padding: "20px", borderRadius: "10px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", marginBottom: "40px" }}>
-          <h2 style={{ borderBottom: "2px solid #28a745", paddingBottom: "10px", color: "#333" }}>📍 Live Field Triangulation</h2>
-          {loading ? (
-            <p>Loading Map Data...</p>
-          ) : (
-            <div style={{ display: "flex", gap: "20px", height: "65vh" }}>
-              
-              {/* Sidebar */}
-              <div style={{ width: "350px", overflowY: "auto", paddingRight: "10px" }}>
-                <h3 style={{ color: "#fd7e14", borderBottom: "2px solid #fd7e14", paddingBottom: "5px" }}>🦠 Diseases (Pending) - {diseases.length}</h3>
-                {diseases.length === 0 ? <p style={{fontSize:"12px"}}>No disease records found.</p> : diseases.map(loc => <RecordCard key={loc.id} loc={loc} />)}
+      <style>{`
 
-                <h3 style={{ color: "#0056b3", borderBottom: "2px solid #0056b3", paddingBottom: "5px", marginTop: "25px" }}>🧪 Deficiencies - {deficiencies.length}</h3>
-                <h4 style={{ color: "#28a745", margin: "10px 0 5px 0" }}>✅ Validated (Urea/TSP/MOP) - {defGreen.length}</h4>
-                {defGreen.length === 0 ? <p style={{fontSize:"12px"}}>No validated records.</p> : defGreen.map(loc => <RecordCard key={loc.id} loc={loc} />)}
-                
-                <h4 style={{ color: "#dc3545", margin: "15px 0 5px 0" }}>❌ Rejected (Safe) - {defRed.length}</h4>
-                {defRed.length === 0 ? <p style={{fontSize:"12px"}}>No rejected records.</p> : defRed.map(loc => <RecordCard key={loc.id} loc={loc} />)}
-                
-                <h4 style={{ color: "#fd7e14", margin: "15px 0 5px 0" }}>⚠️ Pending (No Soil Data) - {defOrange.length}</h4>
-                {defOrange.length === 0 ? <p style={{fontSize:"12px"}}>No pending records.</p> : defOrange.map(loc => <RecordCard key={loc.id} loc={loc} />)}
-              </div>
+        * {
+          box-sizing: border-box;
+        }
 
-              {/* Map */}
-              <div style={{ flex: 1, border: "2px solid #ddd", borderRadius: "8px", overflow: "hidden", zIndex: 1 }}>
-                <MapContainer center={[8.3114, 80.4037]} zoom={10} style={{ height: "100%", width: "100%" }}>
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
-                  {locations.map((loc) => (
-                    <CircleMarker key={loc.id} center={[parseFloat(loc.latitude), parseFloat(loc.longitude)]} radius={8} pathOptions={{ fillColor: getMarkerColor(loc.marker_color), color: "#fff", weight: 2, fillOpacity: 0.9 }}>
-                      <Popup>
-                        <div style={{ fontSize: "14px" }}>
-                          <b>Prediction:</b> {loc.prediction} <br/>
-                          <b>Status:</b> {loc.status} <br/>
-                          <b>Confidence:</b> {(parseFloat(loc.confidence) * 100).toFixed(1)}% <br/>
-                        </div>
-                      </Popup>
-                    </CircleMarker>
-                  ))}
-                </MapContainer>
-              </div>
-            </div>
-          )}
+        .admin-page {
+          font-family: Arial, Helvetica, sans-serif;
+          background: #f4f7f6;
+          min-height: 100vh;
+          padding-bottom: 50px;
+          color: #333;
+        }
+
+        /* =========================
+           HEADER
+        ========================= */
+
+        .admin-header {
+          background-image:
+            linear-gradient(
+              rgba(0,0,0,.62),
+              rgba(0,0,0,.62)
+            ),
+            url("/rice_bg.jpg");
+
+          background-size: cover;
+          background-position: center;
+
+          min-height: 280px;
+
+          display: flex;
+          align-items: center;
+          justify-content: center;
+
+          text-align: center;
+
+          padding: 45px 20px;
+
+          color: white;
+
+          box-shadow:
+            0 4px 10px rgba(0,0,0,.12);
+        }
+
+        .admin-header h1 {
+          margin: 0;
+
+          font-size:
+            clamp(32px, 5vw, 48px);
+
+          font-weight: 700;
+
+          letter-spacing: .5px;
+        }
+
+        .admin-header p {
+          margin-top: 12px;
+
+          font-size:
+            clamp(15px, 2vw, 18px);
+
+          opacity: .92;
+        }
+
+        /* =========================
+           MAIN CONTAINER
+        ========================= */
+
+        .admin-container {
+          width:
+            min(1400px, calc(100% - 40px));
+
+          margin:
+            30px auto 0;
+        }
+
+        /* =========================
+           SECTION CARD
+        ========================= */
+
+        .section-card {
+          background: #fff;
+
+          border-radius: 10px;
+
+          padding: 28px;
+
+          margin-bottom: 30px;
+
+          box-shadow:
+            0 2px 8px rgba(0,0,0,.08);
+
+          overflow: hidden;
+        }
+
+        .section-title {
+          margin: 0 0 22px;
+
+          padding-bottom: 12px;
+
+          border-bottom:
+            2px solid #28a745;
+
+          color: #333;
+
+          font-size: 24px;
+
+          font-weight: 700;
+        }
+
+        .section-title.blue {
+          border-bottom-color: #0056b3;
+        }
+
+        /* =========================
+           MAP SECTION
+        ========================= */
+
+        .map-layout {
+          display: grid;
+
+          grid-template-columns:
+            minmax(260px, 350px)
+            minmax(0, 1fr);
+
+          gap: 20px;
+
+          height: 65vh;
+
+          min-height: 500px;
+        }
+
+        .records-panel {
+          min-width: 0;
+
+          overflow-y: auto;
+
+          padding-right: 8px;
+        }
+
+        .records-heading {
+          margin: 0 0 10px;
+
+          padding-bottom: 7px;
+
+          font-size: 17px;
+
+          border-bottom:
+            2px solid currentColor;
+        }
+
+        .records-heading.orange {
+          color: #fd7e14;
+        }
+
+        .records-heading.blue {
+          color: #0056b3;
+        }
+
+        .records-heading.green {
+          color: #28a745;
+        }
+
+        .records-heading.red {
+          color: #dc3545;
+        }
+
+        .record-card {
+          border-left:
+            5px solid #28a745;
+
+          border-radius: 6px;
+
+          padding: 11px;
+
+          margin-bottom: 10px;
+
+          background: #fff;
+
+          box-shadow:
+            0 1px 4px rgba(0,0,0,.09);
+        }
+
+        .record-title {
+          font-weight: 700;
+
+          font-size: 14px;
+        }
+
+        .record-meta {
+          font-size: 12px;
+
+          color: #666;
+
+          margin-top: 4px;
+        }
+
+        .map-wrapper {
+          min-width: 0;
+
+          height: 100%;
+
+          border:
+            2px solid #ddd;
+
+          border-radius: 8px;
+
+          overflow: hidden;
+
+          z-index: 1;
+        }
+
+        /* =========================
+           FORMS
+        ========================= */
+
+        .data-form {
+          display: grid;
+
+          gap: 15px;
+
+          margin-bottom: 25px;
+
+          background: #f8f9fa;
+
+          padding: 20px;
+
+          border-radius: 8px;
+        }
+
+        .soil-form {
+          grid-template-columns:
+            repeat(3, minmax(0, 1fr));
+        }
+
+        .rule-form {
+          grid-template-columns:
+            repeat(4, minmax(0, 1fr));
+        }
+
+        .form-control {
+          width: 100%;
+
+          min-width: 0;
+
+          padding: 11px 12px;
+
+          border-radius: 5px;
+
+          border:
+            1px solid #ccc;
+
+          background: #fff;
+
+          font-size: 14px;
+
+          outline: none;
+        }
+
+        .form-control:focus {
+          border-color: #0056b3;
+
+          box-shadow:
+            0 0 0 2px
+            rgba(0,86,179,.12);
+        }
+
+        .form-actions {
+          grid-column: 1 / -1;
+
+          display: flex;
+
+          justify-content: flex-end;
+
+          align-items: center;
+
+          gap: 10px;
+
+          flex-wrap: wrap;
+        }
+
+        /* =========================
+           BUTTONS
+        ========================= */
+
+        .btn {
+          border: none;
+
+          padding: 10px 18px;
+
+          border-radius: 5px;
+
+          cursor: pointer;
+
+          font-weight: 700;
+
+          font-size: 14px;
+
+          transition:
+            opacity .15s ease,
+            transform .15s ease;
+        }
+
+        .btn:hover {
+          opacity: .9;
+
+          transform:
+            translateY(-1px);
+        }
+
+        .btn-add {
+          background: #0d6efd;
+          color: #fff;
+        }
+
+        .btn-rule-add {
+          background: #28a745;
+          color: #fff;
+        }
+
+        .btn-update {
+          background: #ffc107;
+          color: #000;
+        }
+
+        .btn-cancel {
+          background: #6c757d;
+          color: #fff;
+        }
+
+        .btn-edit {
+          background: #17a2b8;
+          color: #fff;
+
+          padding: 7px 12px;
+        }
+
+        .btn-delete {
+          background: #dc3545;
+          color: #fff;
+
+          padding: 7px 12px;
+        }
+
+        /* =========================
+           TABLE
+        ========================= */
+
+        .table-wrapper {
+          width: 100%;
+
+          max-height: 350px;
+
+          overflow: auto;
+
+          border:
+            1px solid #ddd;
+
+          border-radius: 5px;
+        }
+
+        .data-table {
+          width: 100%;
+
+          min-width: 850px;
+
+          border-collapse:
+            collapse;
+
+          text-align: left;
+
+          font-size: 14px;
+        }
+
+        .data-table th {
+          padding: 12px;
+
+          background: #343a40;
+
+          color: #fff;
+
+          position: sticky;
+
+          top: 0;
+
+          z-index: 2;
+
+          white-space: nowrap;
+        }
+
+        .data-table td {
+          padding: 12px;
+
+          border-bottom:
+            1px solid #ddd;
+
+          white-space: nowrap;
+        }
+
+        .data-table tbody tr:nth-child(even) {
+          background: #f8f9fa;
+        }
+
+        .data-table tbody tr:nth-child(odd) {
+          background: #fff;
+        }
+
+        .action-cell {
+          text-align: center;
+        }
+
+        .empty-text {
+          font-size: 12px;
+
+          color: #777;
+        }
+
+        /* =========================
+           TABLET
+        ========================= */
+
+        @media (max-width: 1000px) {
+
+          .map-layout {
+            grid-template-columns: 1fr;
+
+            height: auto;
+          }
+
+          .records-panel {
+            max-height: 360px;
+          }
+
+          .map-wrapper {
+            height: 520px;
+          }
+
+          .soil-form {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+          }
+
+          .rule-form {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+          }
+        }
+
+        /* =========================
+           MOBILE
+        ========================= */
+
+        @media (max-width: 650px) {
+
+          .admin-container {
+            width:
+              min(100% - 20px, 1400px);
+
+            margin-top: 15px;
+          }
+
+          .admin-header {
+            min-height: 220px;
+
+            padding:
+              35px 15px;
+          }
+
+          .section-card {
+            padding: 18px;
+
+            margin-bottom: 18px;
+
+            border-radius: 8px;
+          }
+
+          .section-title {
+            font-size: 20px;
+          }
+
+          .soil-form,
+          .rule-form {
+            grid-template-columns: 1fr;
+
+            padding: 15px;
+          }
+
+          .form-actions {
+            justify-content: stretch;
+          }
+
+          .form-actions .btn {
+            flex: 1;
+
+            min-width: 120px;
+          }
+
+          .map-wrapper {
+            height: 430px;
+          }
+
+          .records-panel {
+            max-height: 330px;
+          }
+
+          .data-table {
+            min-width: 850px;
+          }
+        }
+
+      `}</style>
+
+      {/* =========================
+          HEADER
+      ========================= */}
+
+      <header className="admin-header">
+        <div>
+
+          <h1>
+            Admin Panel
+          </h1>
+
+          <p>
+            Real-time field triangulation,
+            soil data and fertilizer rule management
+          </p>
+
         </div>
+      </header>
 
-        {/* 3. CSV MANAGEMENT SECTION */}
-        <div style={{ backgroundColor: "#fff", padding: "30px", borderRadius: "10px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
-          <h2 style={{ borderBottom: "2px solid #0056b3", paddingBottom: "10px", color: "#333", marginBottom: "20px" }}>🗄️ Soil Data Management (CSV Database)</h2>
-          
-          {/* Form */}
-          <form onSubmit={handleCsvSubmit} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "30px", backgroundColor: "#f8f9fa", padding: "20px", borderRadius: "8px" }}>
-            <input type="text" name="ds_division" placeholder="DS Division" value={formData.ds_division} onChange={handleFormChange} required style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }} />
-            <input type="text" name="gn_division" placeholder="GN Division" value={formData.gn_division} onChange={handleFormChange} required style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }} />
-            <input type="number" step="0.1" name="ph_value" placeholder="pH Value" value={formData.ph_value} onChange={handleFormChange} required style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }} />
-            <input type="number" step="0.1" name="phosphorus_value" placeholder="Phosphorus (mg/kg)" value={formData.phosphorus_value} onChange={handleFormChange} required style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }} />
-            <input type="number" step="0.1" name="potassium_value" placeholder="Potassium (mg/kg)" value={formData.potassium_value} onChange={handleFormChange} required style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }} />
-            <input type="number" step="0.1" name="organic_matter_status" placeholder="Organic Matter (%)" value={formData.organic_matter_status} onChange={handleFormChange} required style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }} />
-            
-            <div style={{ gridColumn: "span 3", textAlign: "right" }}>
-              <button type="submit" style={{ backgroundColor: editingId !== null ? "#ffc107" : "#0d6efd", color: editingId !== null ? "#000" : "#fff", padding: "10px 20px", border: "none", borderRadius: "5px", cursor: "pointer", fontWeight: "bold" }}>
-                {editingId !== null ? "Update Record 🔄" : "Add New Record ➕"}
+      <main className="admin-container">
+
+        {/* =========================
+            LIVE FIELD TRIANGULATION
+        ========================= */}
+
+        <section className="section-card">
+
+          <h2 className="section-title">
+            Live Field Triangulation
+          </h2>
+
+          {loading ? (
+
+            <p>
+              Loading Map Data...
+            </p>
+
+          ) : (
+
+            <div className="map-layout">
+
+              {/* RECORDS */}
+
+              <div className="records-panel">
+
+                <h3 className="records-heading orange">
+                  Diseases (Pending) - {diseases.length}
+                </h3>
+
+                {diseases.length === 0 ? (
+
+                  <p className="empty-text">
+                    No disease records found.
+                  </p>
+
+                ) : (
+
+                  diseases.map((loc) => (
+                    <RecordCard
+                      key={loc.id}
+                      loc={loc}
+                    />
+                  ))
+
+                )}
+
+                <h3
+                  className="records-heading blue"
+                  style={{
+                    marginTop: 25
+                  }}
+                >
+                  Deficiencies - {deficiencies.length}
+                </h3>
+
+                <h4
+                  className="records-heading green"
+                  style={{
+                    marginTop: 10
+                  }}
+                >
+                  Validated (Urea/TSP/MOP) -
+                  {" "}
+                  {defGreen.length}
+                </h4>
+
+                {defGreen.length === 0 ? (
+
+                  <p className="empty-text">
+                    No validated records.
+                  </p>
+
+                ) : (
+
+                  defGreen.map((loc) => (
+                    <RecordCard
+                      key={loc.id}
+                      loc={loc}
+                    />
+                  ))
+
+                )}
+
+                <h4
+                  className="records-heading red"
+                  style={{
+                    marginTop: 15
+                  }}
+                >
+                  Rejected (Safe) -
+                  {" "}
+                  {defRed.length}
+                </h4>
+
+                {defRed.length === 0 ? (
+
+                  <p className="empty-text">
+                    No rejected records.
+                  </p>
+
+                ) : (
+
+                  defRed.map((loc) => (
+                    <RecordCard
+                      key={loc.id}
+                      loc={loc}
+                    />
+                  ))
+
+                )}
+
+                <h4
+                  className="records-heading orange"
+                  style={{
+                    marginTop: 15
+                  }}
+                >
+                  Pending (No Soil Data) -
+                  {" "}
+                  {defOrange.length}
+                </h4>
+
+                {defOrange.length === 0 ? (
+
+                  <p className="empty-text">
+                    No pending records.
+                  </p>
+
+                ) : (
+
+                  defOrange.map((loc) => (
+                    <RecordCard
+                      key={loc.id}
+                      loc={loc}
+                    />
+                  ))
+
+                )}
+
+              </div>
+
+              {/* MAP */}
+
+              <div className="map-wrapper">
+
+                <MapContainer
+                  center={[
+                    8.3114,
+                    80.4037
+                  ]}
+                  zoom={10}
+                  style={{
+                    height: "100%",
+                    width: "100%"
+                  }}
+                >
+
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution="&copy; OpenStreetMap"
+                  />
+
+                  {locations.map((loc) => (
+
+                    <CircleMarker
+                      key={loc.id}
+                      center={[
+                        parseFloat(
+                          loc.latitude
+                        ),
+                        parseFloat(
+                          loc.longitude
+                        )
+                      ]}
+                      radius={8}
+                      pathOptions={{
+                        fillColor:
+                          getMarkerColor(
+                            loc.marker_color
+                          ),
+
+                        color: "#fff",
+
+                        weight: 2,
+
+                        fillOpacity: 0.9
+                      }}
+                    >
+
+                      <Popup>
+
+                        <div
+                          style={{
+                            fontSize: "14px"
+                          }}
+                        >
+
+                          <b>
+                            Prediction:
+                          </b>{" "}
+                          {loc.prediction}
+
+                          <br />
+
+                          <b>
+                            Status:
+                          </b>{" "}
+                          {loc.status}
+
+                          <br />
+
+                          <b>
+                            Confidence:
+                          </b>{" "}
+                          {(
+                            parseFloat(
+                              loc.confidence
+                            ) * 100
+                          ).toFixed(1)}
+                          %
+
+                        </div>
+
+                      </Popup>
+
+                    </CircleMarker>
+
+                  ))}
+
+                </MapContainer>
+
+              </div>
+
+            </div>
+
+          )}
+
+        </section>
+
+        {/* =========================
+            SOIL DATA MANAGEMENT
+        ========================= */}
+
+        <section className="section-card">
+
+          <h2 className="section-title blue">
+            Soil Data Management
+          </h2>
+
+          <form
+            onSubmit={handleCsvSubmit}
+            className="data-form soil-form"
+          >
+
+            <input
+              className="form-control"
+              type="text"
+              name="ds_division"
+              placeholder="DS Division"
+              value={formData.ds_division}
+              onChange={handleFormChange}
+              required
+            />
+
+            <input
+              className="form-control"
+              type="text"
+              name="gn_division"
+              placeholder="GN Division"
+              value={formData.gn_division}
+              onChange={handleFormChange}
+              required
+            />
+
+            <input
+              className="form-control"
+              type="number"
+              step="0.1"
+              name="ph_value"
+              placeholder="pH Value"
+              value={formData.ph_value}
+              onChange={handleFormChange}
+              required
+            />
+
+            <input
+              className="form-control"
+              type="number"
+              step="0.001"
+              name="ec_value"
+              placeholder="EC Value"
+              value={formData.ec_value}
+              onChange={handleFormChange}
+              required
+            />
+
+            <input
+              className="form-control"
+              type="number"
+              step="0.1"
+              name="phosphorus_value"
+              placeholder="Phosphorus (mg/kg)"
+              value={
+                formData.phosphorus_value
+              }
+              onChange={handleFormChange}
+              required
+            />
+
+            <input
+              className="form-control"
+              type="number"
+              step="0.1"
+              name="potassium_value"
+              placeholder="Potassium (mg/kg)"
+              value={
+                formData.potassium_value
+              }
+              onChange={handleFormChange}
+              required
+            />
+
+            <input
+              className="form-control"
+              type="number"
+              step="0.1"
+              name="organic_matter_status"
+              placeholder="Organic Matter (%)"
+              value={
+                formData.organic_matter_status
+              }
+              onChange={handleFormChange}
+              required
+            />
+
+            <div className="form-actions">
+
+              <button
+                type="submit"
+                className={`btn ${
+                  editingId !== null
+                    ? "btn-update"
+                    : "btn-add"
+                }`}
+              >
+
+                {editingId !== null
+                  ? "Update Record"
+                  : "Add Soil Record"}
+
               </button>
+
               {editingId !== null && (
-                <button type="button" onClick={() => { setEditingId(null); setFormData({ ds_division: "", gn_division: "", ph_value: "", phosphorus_value: "", potassium_value: "", organic_matter_status: "" }); }} style={{ backgroundColor: "#6c757d", color: "#fff", padding: "10px 20px", border: "none", borderRadius: "5px", cursor: "pointer", marginLeft: "10px", fontWeight: "bold" }}>
+
+                <button
+                  type="button"
+                  className="btn btn-cancel"
+                  onClick={() => {
+
+                    setEditingId(null);
+
+                    setFormData({
+                      ds_division: "",
+                      gn_division: "",
+                      ph_value: "",
+                      ec_value: "",
+                      phosphorus_value: "",
+                      potassium_value: "",
+                      organic_matter_status: ""
+                    });
+
+                  }}
+                >
                   Cancel
                 </button>
+
               )}
+
             </div>
+
           </form>
 
-          {/* Table */}
-          <div style={{ maxHeight: "400px", overflowY: "auto", border: "1px solid #ddd", borderRadius: "5px" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-              <thead style={{ backgroundColor: "#343a40", color: "#fff", position: "sticky", top: 0 }}>
+          <div className="table-wrapper">
+
+            <table className="data-table">
+
+              <thead>
+
                 <tr>
-                  <th style={{ padding: "12px" }}>DS Division</th>
-                  <th style={{ padding: "12px" }}>GN Division</th>
-                  <th style={{ padding: "12px" }}>pH</th>
-                  <th style={{ padding: "12px" }}>Phosphorus</th>
-                  <th style={{ padding: "12px" }}>Potassium</th>
-                  <th style={{ padding: "12px" }}>Organic Matter</th>
-                  <th style={{ padding: "12px", textAlign: "center" }}>Actions</th>
+
+                  <th>
+                    DS Division
+                  </th>
+
+                  <th>
+                    GN Division
+                  </th>
+
+                  <th>
+                    pH
+                  </th>
+
+                  <th>
+                    EC
+                  </th>
+
+                  <th>
+                    Phosphorus
+                  </th>
+
+                  <th>
+                    Potassium
+                  </th>
+
+                  <th>
+                    Organic Matter
+                  </th>
+
+                  <th className="action-cell">
+                    Actions
+                  </th>
+
                 </tr>
+
               </thead>
+
               <tbody>
-                {soilData.map((row, index) => (
-                  <tr key={index} style={{ borderBottom: "1px solid #ddd", backgroundColor: index % 2 === 0 ? "#f8f9fa" : "#fff" }}>
-                    <td style={{ padding: "12px" }}>{row.ds_division}</td>
-                    <td style={{ padding: "12px" }}>{row.gn_division}</td>
-                    <td style={{ padding: "12px" }}>{row.ph_value}</td>
-                    <td style={{ padding: "12px" }}>{row.phosphorus_value}</td>
-                    <td style={{ padding: "12px" }}>{row.potassium_value}</td>
-                    <td style={{ padding: "12px" }}>{row.organic_matter_status}</td>
-                    <td style={{ padding: "12px", textAlign: "center" }}>
-                      <button onClick={() => editRow(row)} style={{ backgroundColor: "#17a2b8", color: "#fff", border: "none", padding: "5px 10px", borderRadius: "4px", cursor: "pointer", marginRight: "5px" }}>Edit</button>
-                      <button onClick={() => deleteRow(row.id)} style={{ backgroundColor: "#dc3545", color: "#fff", border: "none", padding: "5px 10px", borderRadius: "4px", cursor: "pointer" }}>Delete</button>
-                    </td>
-                  </tr>
-                ))}
+
+                {soilData.map(
+                  (row, index) => (
+
+                    <tr key={index}>
+
+                      <td>
+                        {row.ds_division}
+                      </td>
+
+                      <td>
+                        {row.gn_division}
+                      </td>
+
+                      <td>
+                        {row.ph_value}
+                      </td>
+
+                      <td>
+                        {row.ec_value}
+                      </td>
+
+                      <td>
+                        {row.phosphorus_value}
+                      </td>
+
+                      <td>
+                        {row.potassium_value}
+                      </td>
+
+                      <td>
+                        {row.organic_matter_status}
+                      </td>
+
+                      <td className="action-cell">
+
+                        <button
+                          onClick={() =>
+                            editRow(row)
+                          }
+                          className="btn btn-edit"
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            deleteRow(row.id)
+                          }
+                          className="btn btn-delete"
+                          style={{
+                            marginLeft: 5
+                          }}
+                        >
+                          Delete
+                        </button>
+
+                      </td>
+
+                    </tr>
+
+                  )
+                )}
+
               </tbody>
+
             </table>
+
           </div>
 
-        </div>
-      </div>
+        </section>
+
+        {/* =========================
+            FERTILIZER RULES
+        ========================= */}
+
+        <section className="section-card">
+
+          <h2 className="section-title">
+            Fertilizer Rules Management
+          </h2>
+
+          <form
+            onSubmit={handleRuleSubmit}
+            className="data-form rule-form"
+          >
+
+            <input
+              className="form-control"
+              type="text"
+              name="irrigation_type"
+              placeholder="Irrigation (Irrigated/Rainfed)"
+              value={
+                ruleForm.irrigation_type
+              }
+              onChange={handleRuleChange}
+              required
+            />
+
+            <input
+              className="form-control"
+              type="number"
+              step="0.1"
+              name="crop_age_months"
+              placeholder="Crop Age (Months)"
+              value={
+                ruleForm.crop_age_months
+              }
+              onChange={handleRuleChange}
+              required
+            />
+
+            <input
+              className="form-control"
+              type="text"
+              name="nutrient"
+              placeholder="Nutrient (N/P/K)"
+              value={ruleForm.nutrient}
+              onChange={handleRuleChange}
+              required
+            />
+
+            <input
+              className="form-control"
+              type="number"
+              step="0.1"
+              name="soil_level_min"
+              placeholder="Soil Level Min"
+              value={
+                ruleForm.soil_level_min
+              }
+              onChange={handleRuleChange}
+              required
+            />
+
+            <input
+              className="form-control"
+              type="number"
+              step="0.1"
+              name="soil_level_max"
+              placeholder="Soil Level Max"
+              value={
+                ruleForm.soil_level_max
+              }
+              onChange={handleRuleChange}
+              required
+            />
+
+            <input
+              className="form-control"
+              type="text"
+              name="stage"
+              placeholder="Stage (Week_2/Basal)"
+              value={ruleForm.stage}
+              onChange={handleRuleChange}
+              required
+            />
+
+            <input
+              className="form-control"
+              type="text"
+              name="fertilizer_name"
+              placeholder="Fertilizer Name (Urea/TSP/MOP)"
+              value={
+                ruleForm.fertilizer_name
+              }
+              onChange={handleRuleChange}
+              required
+            />
+
+            <input
+              className="form-control"
+              type="number"
+              step="0.1"
+              name="amount_kg_acre"
+              placeholder="Amount (kg/acre)"
+              value={
+                ruleForm.amount_kg_acre
+              }
+              onChange={handleRuleChange}
+              required
+            />
+
+            <div className="form-actions">
+
+              <button
+                type="submit"
+                className={`btn ${
+                  editingRuleId !== null
+                    ? "btn-update"
+                    : "btn-rule-add"
+                }`}
+              >
+
+                {editingRuleId !== null
+                  ? "Update Rule"
+                  : "Add Rule"}
+
+              </button>
+
+              {editingRuleId !== null && (
+
+                <button
+                  type="button"
+                  className="btn btn-cancel"
+                  onClick={() =>
+                    setEditingRuleId(null)
+                  }
+                >
+                  Cancel
+                </button>
+
+              )}
+
+            </div>
+
+          </form>
+
+          <div className="table-wrapper">
+
+            <table className="data-table">
+
+              <thead>
+
+                <tr>
+
+                  <th>
+                    Irrigation
+                  </th>
+
+                  <th>
+                    Age
+                  </th>
+
+                  <th>
+                    Nutrient
+                  </th>
+
+                  <th>
+                    Min Soil
+                  </th>
+
+                  <th>
+                    Max Soil
+                  </th>
+
+                  <th>
+                    Stage
+                  </th>
+
+                  <th>
+                    Fertilizer
+                  </th>
+
+                  <th>
+                    kg/acre
+                  </th>
+
+                  <th className="action-cell">
+                    Actions
+                  </th>
+
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {rulesData.map(
+                  (row, index) => (
+
+                    <tr key={index}>
+
+                      <td>
+                        {row.irrigation_type}
+                      </td>
+
+                      <td>
+                        {row.crop_age_months}
+                      </td>
+
+                      <td>
+                        {row.nutrient}
+                      </td>
+
+                      <td>
+                        {row.soil_level_min}
+                      </td>
+
+                      <td>
+                        {row.soil_level_max}
+                      </td>
+
+                      <td>
+                        {row.stage}
+                      </td>
+
+                      <td>
+                        {row.fertilizer_name}
+                      </td>
+
+                      <td>
+                        {row.amount_kg_acre}
+                      </td>
+
+                      <td className="action-cell">
+
+                        <button
+                          onClick={() =>
+                            editRuleRow(row)
+                          }
+                          className="btn btn-edit"
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            deleteRuleRow(row.id)
+                          }
+                          className="btn btn-delete"
+                          style={{
+                            marginLeft: 5
+                          }}
+                        >
+                          Delete
+                        </button>
+
+                      </td>
+
+                    </tr>
+
+                  )
+                )}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        </section>
+
+      </main>
+
     </div>
   );
 }

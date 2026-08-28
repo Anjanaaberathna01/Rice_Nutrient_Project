@@ -24,17 +24,18 @@ subprojects {
                     namespace = group.toString()
                 }
                 compileOptions {
-                    sourceCompatibility = JavaVersion.VERSION_11
-                    targetCompatibility = JavaVersion.VERSION_11
+                    // 💡 Java 11, Java 17 walata change karanna
+                    sourceCompatibility = JavaVersion.VERSION_17
+                    targetCompatibility = JavaVersion.VERSION_17
                 }
             }
         }
     }
 
-    // 💡 අලුත් Kotlin compilerOptions DSL එක මෙන්න මෙහෙමයි ලියන්නෙ (Error එක නෑ)
+    // 💡 Kotlin JVM Target ekath VERSION_17 walata change karanna
     tasks.withType<KotlinCompile>().configureEach {
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
     }
 }

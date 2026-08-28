@@ -2,8 +2,8 @@ from rembg import remove
 import PIL.Image
 import os
 
-input_dir = 'dataset/multi_label_classifier' # ඔයාගේ දැනට තියෙන පින්තූර
-output_dir = 'dataset/cleaned_multi_label_dataset'       # පිරිසිදු පින්තූර සේව් වන තැන
+input_dir = 'dataset/test_data' # ඔයාගේ දැනට තියෙන පින්තූර
+output_dir = 'dataset/cleaned_test_data'       # පිරිසිදු පින්තූර සේව් වන තැන
 
 os.makedirs(output_dir, exist_ok=True)
 

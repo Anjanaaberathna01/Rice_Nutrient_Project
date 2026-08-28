@@ -1,3 +1,50 @@
-ds_division,gn_division,ph_value,ph_status,ec_value,phosphorus_value,potassium_value,organic_matter_status,irr_urea_2_3,irr_urea_5_4,irr_urea_7_6,irr_urea_8_7,basal_irr_urea,irr_TSP_2_3,irr_TSP_5_4,irr_TSP_7_6,irr_TSP_8_7,basal_irr_TSP,irr_MOP_2_3,irr_MOP_5_4,irr_MOP_7_6,irr_MOP_8_7,basal_irr_MOP,rain_urea_2_3,rain_urea_5_4,rain_urea_7_6,rain_urea_8_7,basal_rain_urea,rain_TSP_2_3,rain_TSP_5_4,rain_TSP_6_7,rain_TSP_8_7,basal_rain_TSP,rain_MOP_2_3,rain_MOP_5_4,rain_MOP_7_6,rain_MOP_8_7,basal_rain_MOP
-anuradhapura,srwasthipura,6.5,Neutral,0.1,25.8,18,2.3,20,30,26,14,90,0,0,0,0,12,0,10,14,0,24,12,26,20,12,70,0,0,0,0,0,8,0,10,0,20
-kandy,udunuwara,0.26,0,0.0,25,30,40,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+﻿district,ds_division,gn_division,ph_value,ec_value,phosphorus_value,potassium_value,organic_matter_status
+anuradhapura,galenbindunuwewa,hibutugollewa,8.8,0.250,8.9,635.0,1.5
+anuradhapura,galenbindunuwewa,ulpathgama,8.5,0.090,17.2,436.5,1.6
+anuradhapura,galenbindunuwewa,mailagaswewa,8.2,0.710,14.0,157.0,1.2
+anuradhapura,galenbindunuwewa,thammennawa,8.4,0.150,27.9,64.0,1.6
+anuradhapura,galenbindunuwewa,galenbindunuwewa,8.3,0.137,11.5,187.0,1.6
+anuradhapura,galenbindunuwewa,ihalagama,8.1,0.300,9.4,106.0,1.2
+anuradhapura,galenbindunuwewa,ilukbadayagama,8.0,0.113,16.7,219.6,1.3
+anuradhapura,galenbindunuwewa,dutuwewa,7.8,0.130,14.6,89.0,1.0
+anuradhapura,galenbindunuwewa,pereththupalagama,7.8,0.100,11.0,122.0,0.6
+anuradhapura,galenbindunuwewa,kekirawa,7.6,0.310,6.6,130.0,1.4
+anuradhapura,galenbindunuwewa,palugollagama,7.9,0.140,10.9,311.0,1.4
+anuradhapura,galenbindunuwewa,karuwalagaswewa,7.4,0.130,11.9,136.3,1.4
+anuradhapura,galenbindunuwewa,kumbukwewa,7.5,0.150,9.9,208.0,1.1
+anuradhapura,galenbindunuwewa,hurulunika wewa,7.8,0.110,9.7,143.1,1.1
+anuradhapura,galnewa,pahala kalankuttiya,6.6,0.060,34.6,255.4,2.0
+anuradhapura,galnewa,otunu peladigama,6.6,0.070,33.2,191.4,1.7
+anuradhapura,galnewa,namalgamua,6.7,0.070,18.6,156.4,2.6
+anuradhapura,galnewa,malbaligala,6.3,0.100,23.3,144.7,2.2
+anuradhapura,galnewa,usgala halmillewa,6.2,0.100,15.0,122.3,2.7
+anuradhapura,galnewa,kendaragama,6.8,0.120,29.0,107.0,1.9
+anuradhapura,medawachchiya,ipalogama,7.3,0.130,25.0,80.8,4.4
+anuradhapura,medawachchiya,kidawarankulama 42,7.0,0.030,11.0,55.4,1.5
+anuradhapura,medawachchiya,prabodhagama 43,7.0,0.050,18.3,66.8,1.1
+anuradhapura,medawachchiya,pubudiwula 44,7.0,0.050,8.0,49.2,1.6
+anuradhapura,medawachchiya,parana halmillewa 45,7.1,0.070,6.0,57.6,2.1
+anuradhapura,medawachchiya,mahakumbukgollewa 46,6.7,0.080,7.0,64.8,2.8
+anuradhapura,medawachchiya,punewa 47,6.7,0.010,10.0,66.0,2.0
+anuradhapura,nochchiyagama,lindawewa,6.3,0.090,25.5,17.3,2.2
+anuradhapura,nochchiyagama,halmillakulama,7.0,0.110,30.7,12.8,1.4
+anuradhapura,nochchiyagama,rankethgama,6.8,0.070,29.5,44.5,1.7
+anuradhapura,nochchiyagama,jayagama,6.7,0.040,38.0,6.9,1.4
+anuradhapura,nochchiyagama,mihiripura,6.5,0.090,29.5,26.3,1.9
+anuradhapura,rajanganaya,siripura,6.2,0.206,18.0,69.3,1.8
+anuradhapura,rajanganaya,panthiyawa,5.3,0.215,23.5,110.4,1.6
+anuradhapura,rajanganaya,horobgama,6.2,0.201,64.0,55.4,1.0
+anuradhapura,rambewa,mahakanadarawewa 93,7.0,0.140,6.4,173.5,0.8
+anuradhapura,rambewa,rambewa,7.3,0.140,7.4,182.0,0.9
+anuradhapura,rambewa,mahawewa,8.4,0.270,47.1,159.0,1.4
+anuradhapura,rambewa,katukeliyawa,8.7,0.070,9.8,204.0,1.2
+anuradhapura,thalawa,rajallegama,7.0,0.135,17.0,97.0,2.5
+anuradhapura,thalawa,mediyawa,7.4,0.040,18.0,82.4,0.9
+anuradhapura,thalawa,elidiwulwewa,6.7,0.040,14.2,131.1,2.3
+anuradhapura,thalawa,palugaswewa,6.6,0.080,22.5,127.4,2.4
+anuradhapura,thalawa,ihalasiyambalawewa,6.9,0.050,76.0,59.9,1.8
+anuradhapura,thambuththegama,heerigaswewa,6.2,0.094,28.0,138.6,1.8
+anuradhapura,thambuththegama,weliyawa,6.3,0.091,23.5,117.8,1.7
+anuradhapura,thambuththegama,makuluwa,6.6,0.097,15.6,14.3,1.9
+anuradhapura,thambuththegama,hadungoda,6.5,0.091,29.3,18.9,2.2
+anuradhapura,thambuththegama,konwewa,7.3,0.073,50.5,402.1,2.5

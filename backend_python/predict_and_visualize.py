@@ -7,7 +7,7 @@ from rembg import remove
 from PIL import Image
 import io
 
-# classes load
+# 1. Classes සහ Settings සකස් කිරීම
 IMG_SIZE = (224, 224)
 CLASS_NAMES = [
     'Bacterial_Leaf_Blight', 'Brown_Spot', 'Healthy', 'Leaf_Blast', 
@@ -21,10 +21,10 @@ DISEASE_INDICES = [0, 1, 3, 4, 8]
 
 print("Models Loading... Please wait.")
 # Softmax Binary Model Load
-binary_model = tf.keras.models.load_model('models/rice_binary_disease_and_deficiency_v2.h5', compile=False)
+binary_model = tf.keras.models.load_model('models/rice_binary_disease_and_deficiency.h5', compile=False)
 
-# Ensemble Models Load 
-model_mobile = tf.keras.models.load_model('models/rice_multilabel_model_v4_final.h5', compile=False)
+# Ensemble Models Load (MobileNet වෙනුවට EfficientNetB0 යොදා ඇත)
+model_efficient = tf.keras.models.load_model('models/rice_multilabel_model_efficientnetb0.h5', compile=False)
 model_dense = tf.keras.models.load_model('models/rice_multilabel_model_densenet121.h5', compile=False)
 model_inception = tf.keras.models.load_model('models/rice_multilabel_model_inceptionv3.h5', compile=False)
 print("All Models Loaded Successfully!")
@@ -70,18 +70,19 @@ def predict_ensemble(image_path):
     diff = abs(disease_prob - deficiency_prob)
     is_mixed = diff < uncertainty_threshold
 
-    # --- 4. Ensemble Predictions ---
-    in_m = tf.keras.applications.mobilenet_v2.preprocess_input(img_array.copy())
+    # --- Ensemble Predictions (EfficientNet, DenseNet, Inception) ---
+    in_e = tf.keras.applications.efficientnet.preprocess_input(img_array.copy())
     in_d = tf.keras.applications.densenet.preprocess_input(img_array.copy())
     in_i = tf.keras.applications.inception_v3.preprocess_input(img_array.copy())
 
-    p_m = model_mobile.predict(in_m, verbose=0)[0]
+    p_e = model_efficient.predict(in_e, verbose=0)[0]
     p_d = model_dense.predict(in_d, verbose=0)[0]
     p_i = model_inception.predict(in_i, verbose=0)[0]
 
-    final_preds = (p_m * 0.3) + (p_d * 0.4) + (p_i * 0.3)
+    # Fixed Weights යෙදීම (EfficientNet=0.2, DenseNet=0.4, Inception=0.4)
+    final_preds = (p_e * 0.2) + (p_d * 0.4) + (p_i * 0.4)
 
-    # --- 5. Smart Soft-Filtering Logic ---
+    # --- Smart Soft-Filtering Logic ---
     if not is_mixed:
         if is_disease:
             for idx in DEFICIENCY_INDICES: final_preds[idx] = 0
@@ -90,7 +91,7 @@ def predict_ensemble(image_path):
     else:
         print("මිශ්‍ර ලක්ෂණ පවතින බැවින් සියලුම පන්ති පරීක්ෂා කරයි.")
 
-    # --- 6. Visualization ---
+    # --- Visualization ---
     heatmap = generate_heatmap_ensemble(in_d, model_dense)
     plt.figure(figsize=(20, 6))
     
@@ -116,7 +117,6 @@ def predict_ensemble(image_path):
     top_labels = [CLASS_NAMES[i] for i in top_indices]
     top_scores = [final_preds[i] for i in top_indices]
 
-    # Orange color for mixed
     bar_color = 'orange' if is_mixed else ('red' if is_disease else 'green')
     plt.barh(top_labels, top_scores, color=bar_color)
     plt.title(f"Top Results\n(Conf: {final_preds[top_indices[0]]:.2%})")
@@ -124,17 +124,17 @@ def predict_ensemble(image_path):
     
     plt.tight_layout(); plt.show()
 
-    
-    print("\n" + "="*65)
+    # --- Console Output ---
+    print("\n" + "="*75)
     category_info = "MIXED/UNCERTAIN" if is_mixed else ("DISEASE" if is_disease else "DEFICIENCY")
     print(f"FINAL CATEGORY: {category_info} (Diff: {diff:.1%})")
-    print("="*65)
-    print(f"{'CLASS NAME':<25} | {'V4':<7} | {'DENSE':<7} | {'INCEP':<7} | {'FINAL'}")
-    print("-" * 65)
+    print("="*75)
+    print(f"{'CLASS NAME':<25} | {'EFF-NET':<7} | {'DENSE':<7} | {'INCEP':<7} | {'FINAL'}")
+    print("-" * 75)
     for i in np.argsort(final_preds)[::-1]:
         if final_preds[i] > 0.001:
-            print(f"{CLASS_NAMES[i]:<25} | {p_m[i]:.2f} | {p_d[i]:.2f} | {p_i[i]:.2f} | {final_preds[i]:.2%}")
-    print("="*65)
+            print(f"{CLASS_NAMES[i]:<25} | {p_e[i]:.2f} | {p_d[i]:.2f} | {p_i[i]:.2f} | {final_preds[i]:.2%}")
+    print("="*75)
 
-# tets
-predict_ensemble('42.jpeg')
+# Test execution
+predict_ensemble('7.jpg')

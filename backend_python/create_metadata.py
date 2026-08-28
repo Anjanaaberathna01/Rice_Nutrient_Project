@@ -2,7 +2,7 @@ import os
 import pandas as pd
 
 # 1. පින්තූර ගබඩා කර ඇති ප්‍රධාන ෆෝල්ඩරයේ මාවත (Path) ලබා දීම
-DATASET_PATH = 'dataset/multi_label_classifier'
+DATASET_PATH = 'dataset/cleaned_multi_label_dataset'
 
 # දත්ත තාවකාලිකව ගබඩා කර ගැනීමට ලැයිස්තුවක් (List) සෑදීම
 data = []
@@ -39,7 +39,7 @@ else:
         # Pandas DataFrame එකක් සාදා ගැනීම
         df = pd.DataFrame(data)
         # මෙය ප්‍රධාන ප්‍රොජෙක්ට් ෆෝල්ඩරය තුළ CSV එකක් ලෙස සේව් වේ
-        df.to_csv('multi_label_metadata.csv', index=False)
+        df.to_csv('database/multi_label_metadata.csv', index=False)
         print("-" * 30)
         print(f" Success! 'multi_label_metadata.csv' saved successfully.")
         print(f" Total images mapped: {len(df)}")

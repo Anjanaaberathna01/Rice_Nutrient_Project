@@ -42,15 +42,59 @@ class _HomeScreenState extends State<HomeScreen> {
   double? _lat;
   double? _lng;
 
-  // 💡 ත්‍රිත්වකරණයට අවශ්‍ය Global Variables
   String? _currentPredictionId;
   String? _rawPredictionClass;
   String? _rawCategory;
 
-  final List<String> _dsDivisions = ['anuradhapura'];
-  final Map<String, List<String>> _gnDivisions = {
-    'anuradhapura': ['srwasthipura'],
-  };
+  // dynamic variables for DS and GN divisions
+  String? _selectedDS;
+  String? _selectedGN;
+
+  List<String> _dsDivisions = [];
+  Map<String, List<String>> _gnDivisions = {};
+  bool _isDivisionsLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDivisionsFromBackend();
+  }
+
+  //backend eken divisions ganna function eka
+  Future<void> _fetchDivisionsFromBackend() async {
+    try {
+      var response = await http.get(
+        Uri.parse('http://192.168.1.103:5000/api/get_divisions'),
+      );
+
+      if (response.statusCode == 200) {
+        var data = json.decode(response.body);
+        if (data['status'] == 'success') {
+          setState(() {
+            _dsDivisions = List<String>.from(data['ds_divisions']);
+            
+            var rawGnMap = data['gn_divisions'] as Map<String, dynamic>;
+            _gnDivisions = rawGnMap.map((key, value) {
+              return MapEntry(key, List<String>.from(value));
+            });
+
+            if (_dsDivisions.isNotEmpty) {
+              _selectedDS = _dsDivisions.first;
+              if (_gnDivisions[_selectedDS!] != null && _gnDivisions[_selectedDS!]!.isNotEmpty) {
+                _selectedGN = _gnDivisions[_selectedDS!]!.first;
+              }
+            }
+            _isDivisionsLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print("Error fetching divisions: $e");
+      setState(() {
+        _isDivisionsLoading = false;
+      });
+    }
+  }
 
   Future<Position> _determinePosition() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -78,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (image != null) {
       setState(() {
         _selectedImage = File(image.path);
-        _result = "පින්තූරය ලබාගත්තා. දැන් Analyze කරන්න.";
+        _result = "පින්තූරය ලබාගත්තා. වසම තෝරා Analyze Now ඔබන්න.";
         _heatmapBase64 = null;
         _lat = null;
         _lng = null;
@@ -89,12 +133,20 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _uploadImage() async {
+  // In click Analyze Now (Predict + Soil/Weather Validation)
+  Future<void> _uploadImageAndValidate() async {
     if (_selectedImage == null) return;
+
+    if (_selectedDS == null || _selectedGN == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("කරුණාකර ප්‍රාදේශීය ලේකම් සහ ග්‍රාම නිලධාරී වසම තෝරන්න.")),
+      );
+      return;
+    }
 
     setState(() {
       _isLoading = true;
-      _result = "පින්තූරය පිරිසැකසුම් කරමින් විශ්ලේෂණය කරයි...";
+      _result = "පින්තූරය විශ්ලේෂණය කරමින් සහ පස්/කාලගුණ දත්ත සසඳමින් පවතී...";
     });
 
     try {
@@ -119,7 +171,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _lat = position.latitude;
       _lng = position.longitude;
 
-      var uri = Uri.parse('http://192.168.8.229:5000/predict');
+      // 1. Predict API Call
+      var uri = Uri.parse('http://192.168.1.103:5000/predict');
       var request = http.MultipartRequest('POST', uri);
 
       request.files.add(
@@ -132,161 +185,62 @@ class _HomeScreenState extends State<HomeScreen> {
       var responseData = await response.stream.bytesToString();
       var decodedData = json.decode(responseData);
 
-      setState(() {
-        if (decodedData['status'] == 'success') {
-          double dis = (decodedData['disease_score'] ?? 0.0) * 100;
-          double def = (decodedData['deficiency_score'] ?? 0.0) * 100;
-          double diff = (dis - def).abs();
+      if (decodedData['status'] == 'success') {
+        _currentPredictionId = decodedData['prediction_id']?.toString();
+        _rawPredictionClass = decodedData['prediction'];
+        _rawCategory = decodedData['category'];
+        _heatmapBase64 = decodedData['heatmap'];
 
-          String statusTag = diff < 15
-              ? "⚠️ මිශ්‍ර ලක්ෂණ පවතින බවට සැක කෙරේ\n"
-              : "✅ සාර්ථකව හඳුනා ගන්නා ලදී\n";
+        double dis = (decodedData['disease_score'] ?? 0.0) * 100;
+        double def = (decodedData['deficiency_score'] ?? 0.0) * 100;
 
-          _result =
-              "$statusTag"
-              "----------------------------------\n"
-              "ප්‍රධාන නිගමනය: ${decodedData['prediction']}\n"
-              "විශ්වාසනීයත්වය: ${(decodedData['confidence'] * 100).toStringAsFixed(2)}%\n"
-              "----------------------------------\n"
-              "රෝග ලක්ෂණ: ${dis.toStringAsFixed(0)}%\n"
-              "ඌණතා ලක්ෂණ: ${def.toStringAsFixed(0)}%\n"
-              "----------------------------------\n"
-              "සටහන: ${decodedData['message']}";
-
-          _currentPredictionId = decodedData['prediction_id']?.toString();
-          _rawPredictionClass = decodedData['prediction'];
-          _rawCategory = decodedData['category'];
-          _heatmapBase64 = decodedData['heatmap'];
-
-          if (_heatmapBase64 != null) _showHeatmapDialog();
-        } else {
-          _result = "දෝෂයකි: ${decodedData['message']}";
+        // 2. AI ප්‍රතිඵලය ලැබුණු වහාම ස්වයංක්‍රීයව Validation API Call එක යැවීම
+        if (_currentPredictionId != null) {
+          await _fetchSoilAndWeatherPrediction(
+            _currentPredictionId!,
+            _selectedDS!,
+            _selectedGN!,
+            _rawPredictionClass!,
+            _rawCategory!,
+            _lat,
+            _lng,
+            dis,
+            def,
+            decodedData['confidence'],
+          );
         }
-      });
+
+        if (_heatmapBase64 != null) _showHeatmapDialog();
+      } else {
+        setState(() {
+          _isLoading = false;
+          _result = "දෝෂයකි: ${decodedData['message']}";
+        });
+      }
     } catch (e) {
       setState(() {
-        _result = "සම්බන්ධතා දෝෂයකි: $e";
-      });
-    } finally {
-      setState(() {
         _isLoading = false;
+        _result = "සම්බන්ධතා දෝෂයකි: $e";
       });
     }
   }
 
-  void _showLocationSearchDialog() {
-    TextEditingController? dsFieldController;
-    TextEditingController? gnFieldController;
-    String activeDS = '';
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text("ප්‍රදේශය ඇතුළත් කරන්න (Type to Search)"),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Autocomplete<String>(
-                      optionsBuilder: (TextEditingValue textEditingValue) {
-                        if (textEditingValue.text.isEmpty) {
-                          return const Iterable<String>.empty();
-                        }
-                        return _dsDivisions.where(
-                          (String option) => option.contains(textEditingValue.text.toLowerCase()),
-                        );
-                      },
-                      onSelected: (String selection) {
-                        setDialogState(() {
-                          activeDS = selection; 
-                        });
-                      },
-                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                        dsFieldController = controller; 
-                        return TextField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          decoration: const InputDecoration(
-                            labelText: "ප්‍රාදේශීය ලේකම් කොට්ඨාශය",
-                            prefixIcon: Icon(Icons.search),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 15),
-                    Autocomplete<String>(
-                      optionsBuilder: (TextEditingValue textEditingValue) {
-                        if (textEditingValue.text.isEmpty || activeDS.isEmpty) {
-                           return const Iterable<String>.empty();
-                        }
-                        return _gnDivisions[activeDS]?.where(
-                          (String option) => option.contains(textEditingValue.text.toLowerCase()),
-                        ) ?? const Iterable<String>.empty();
-                      },
-                      onSelected: (String selection) {},
-                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                        gnFieldController = controller; 
-                        return TextField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          decoration: const InputDecoration(
-                            labelText: "ග්‍රාම නිලධාරී වසම",
-                            prefixIcon: Icon(Icons.location_city),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Cancel"),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    String finalDS = dsFieldController?.text.trim() ?? '';
-                    String finalGN = gnFieldController?.text.trim() ?? '';
-
-                    if (finalDS.isNotEmpty && finalGN.isNotEmpty && _currentPredictionId != null) {
-                      Navigator.pop(context);
-                      _fetchFertilizerRecommendation(
-                        _currentPredictionId!,
-                        finalDS, 
-                        finalGN, 
-                        _rawPredictionClass!,
-                        _rawCategory!,
-                      );
-                    }
-                  },
-                  child: const Text("Validate & View Advice"),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _fetchFertilizerRecommendation(
+  // 💡 /validate_and_recommend_fertilizer වෙත API Call එක යැවීම සහ ප්‍රතිඵලය පෙන්වීම
+  Future<void> _fetchSoilAndWeatherPrediction(
     String predId,
     String ds,
     String gn,
     String predClass,
     String cat,
+    double? lat,
+    double? lng,
+    double disScore,
+    double defScore,
+    double confidence,
   ) async {
-    setState(() {
-      _isLoading = true;
-    });
-
     try {
       var uri = Uri.parse(
-        'http://192.168.8.229:5000/validate_and_recommend_fertilizer',
+        'http://192.168.1.103:5000/validate_and_recommend_fertilizer',
       );
 
       var response = await http.post(
@@ -298,24 +252,32 @@ class _HomeScreenState extends State<HomeScreen> {
           "gn_division": gn,
           "prediction": predClass,
           "category": cat,
+          "lat": lat,
+          "lng": lng,
         }),
       );
 
       if (response.statusCode == 200 && mounted) {
         var resData = json.decode(response.body);
+        String recommendation = resData['recommendation'] ?? "විස්තර ලබා ගත නොහැක";
 
         setState(() {
           _isLoading = false;
+          _result = " සාර්ථකව හඳුනා ගන්නා ලදී\n"
+              "----------------------------------\n"
+              "ප්‍රධාන නිගමනය: $predClass\n"
+              "විශ්වාසනීයත්වය: ${(confidence * 100).toStringAsFixed(2)}%\n"
+              "----------------------------------\n"
+              "රෝග ලක්ෂණ: ${disScore.toStringAsFixed(0)}%\n"
+              "ඌණතා ලක්ෂණ: ${defScore.toStringAsFixed(0)}%\n"
+              "----------------------------------\n"
+              "පස් හා කාලගුණ විද්‍යාත්මක පුරෝකථනය:\n"
+              "$recommendation";
         });
-
-        _showFertilizerResultDialog(
-          resData['recommendation'] ?? "No recommendation found",
-        );
       } else {
         setState(() {
           _isLoading = false;
         });
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Server Error : ${response.statusCode}")),
         );
@@ -325,55 +287,16 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _isLoading = false;
         });
-
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Connection Error : $e")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Connection Error : $e")),
+        );
       }
     }
   }
 
-  void _showFertilizerResultDialog(String recommendationMessage) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.gavel_rounded, color: Colors.green),
-            SizedBox(width: 10),
-            Text("විද්‍යාත්මක ත්‍රිත්වකරණය"),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Text(
-            recommendationMessage,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              height: 1.5,
-              color: Colors.black87,
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              "Close",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 💡 Heatmap එක Download කරන Function එක (ඔයාගේ අලුත් කෑල්ල)
- // 💡 අලුත් Gal Package එකෙන් Heatmap එක Download කරන Function එක
   Future<void> _downloadHeatmap() async {
     if (_heatmapBase64 == null) return;
     
-    // Storage Permission ඉල්ලීම
     var status = await Permission.storage.request();
     if (!status.isGranted) {
       status = await Permission.photos.request();
@@ -382,8 +305,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (status.isGranted) {
       try {
         Uint8List imageBytes = base64Decode(_heatmapBase64!);
-        
-        // අලුත් 'gal' package එකෙන් කෙළින්ම bytes සේව් කිරීම
         await Gal.putImageBytes(imageBytes);
 
         if (mounted) {
@@ -407,7 +328,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
   }
-  // 💡 Update කරපු Heatmap Dialog එක 
+
   void _showHeatmapDialog() {
     showDialog(
       context: context,
@@ -451,11 +372,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         actions: [
-          // 💡 මෙතනට Download Button එක එකතු කළා
           TextButton.icon(
             onPressed: () {
               _downloadHeatmap();
-              Navigator.pop(context); // Download එක එබුවම Popup එක වැහෙනවා
+              Navigator.pop(context);
             },
             icon: const Icon(Icons.download),
             label: const Text("Download"),
@@ -489,13 +409,102 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            const SizedBox(height: 20),
+            // 💡 වසම් තෝරාගැනීමේ කොටස (Autocomplete TextFields)
+            Card(
+              elevation: 3,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: _isDivisionsLoading
+                    ? const Center(child: Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: CircularProgressIndicator(),
+                      ))
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "වගා කරන ප්‍රදේශය ඇතුළත් කරන්න:",
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          const SizedBox(height: 10),
+                          
+                          // 1. DS Division Autocomplete
+                          Autocomplete<String>(
+                            optionsBuilder: (TextEditingValue textEditingValue) {
+                              if (textEditingValue.text.isEmpty) {
+                                return const Iterable<String>.empty();
+                              }
+                              return _dsDivisions.where((String ds) =>
+                                  ds.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                            },
+                            onSelected: (String selection) {
+                              setState(() {
+                                _selectedDS = selection;
+                                _selectedGN = _gnDivisions[_selectedDS!]?.first;
+                              });
+                            },
+                            fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                              if (_selectedDS != null && controller.text.isEmpty) {
+                                controller.text = _selectedDS!;
+                              }
+                              return TextField(
+                                controller: controller,
+                                focusNode: focusNode,
+                                decoration: const InputDecoration(
+                                  labelText: "ප්‍රාදේශීය ලේකම් කොට්ඨාශය (DS) ටයිප් කරන්න",
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                  prefixIcon: Icon(Icons.search),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 10),
+
+                          // 2. GN Division Autocomplete
+                          Autocomplete<String>(
+                            optionsBuilder: (TextEditingValue textEditingValue) {
+                              if (textEditingValue.text.isEmpty || _selectedDS == null) {
+                                return const Iterable<String>.empty();
+                              }
+                              List<String> availableGns = _gnDivisions[_selectedDS!] ?? [];
+                              return availableGns.where((String gn) =>
+                                  gn.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                            },
+                            onSelected: (String selection) {
+                              setState(() {
+                                _selectedGN = selection;
+                              });
+                            },
+                            fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                              if (_selectedGN != null && controller.text.isEmpty) {
+                                controller.text = _selectedGN!;
+                              }
+                              return TextField(
+                                controller: controller,
+                                focusNode: focusNode,
+                                decoration: const InputDecoration(
+                                  labelText: "ග්‍රාම නිලධාරී වසම (GN) ටයිප් කරන්න",
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                  prefixIcon: Icon(Icons.location_city),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+            const SizedBox(height: 15),
             Center(
               child: Container(
-                width: 220,
-                height: 400,
+                width: 200,
+                height: 320,
                 decoration: BoxDecoration(
                   border: Border.all(color: Colors.green, width: 3),
                   borderRadius: BorderRadius.circular(15),
@@ -512,24 +521,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Text(
-                    _result,
-                    textAlign: TextAlign.left,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      height: 1.6,
-                    ),
+            const SizedBox(height: 15),
+            Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  _result,
+                  textAlign: TextAlign.left,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    height: 1.6,
                   ),
                 ),
               ),
@@ -555,7 +561,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 12),
                       if (_selectedImage != null)
                         ElevatedButton.icon(
-                          onPressed: _uploadImage,
+                          onPressed: _uploadImageAndValidate,
                           icon: const Icon(Icons.analytics_outlined),
                           label: const Text("Analyze Now"),
                           style: ElevatedButton.styleFrom(
@@ -568,16 +574,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       const SizedBox(height: 12),
-                      
-                      if (_currentPredictionId != null &&
-                          _rawPredictionClass != 'Healthy')
+                      if (_heatmapBase64 != null)
                         ElevatedButton.icon(
-                          onPressed: _showLocationSearchDialog,
-                          icon: const Icon(Icons.spoke_outlined),
-                          label: const Text("Get Fertilizer Advice"),
+                          onPressed: _showHeatmapDialog,
+                          icon: const Icon(Icons.wb_sunny_outlined),
+                          label: const Text("View Heatmap Again"),
                           style: ElevatedButton.styleFrom(
                             minimumSize: const Size(260, 50),
-                            backgroundColor: Colors.purple[700],
+                            backgroundColor: Colors.teal[600],
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(30),
@@ -585,28 +589,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       const SizedBox(height: 12),
-                      
-                      // 💡 Popup එක වැහුවට පස්සේ ඕන වෙලාවක ආයෙත් Heatmap එක බලාගන්න මේ Button එක දැම්මා.
-                      if (_heatmapBase64 != null)
-                        Column(
-                          children: [
-                            ElevatedButton.icon(
-                              onPressed: _showHeatmapDialog,
-                              icon: const Icon(Icons.wb_sunny_outlined),
-                              label: const Text("View Heatmap Again"),
-                              style: ElevatedButton.styleFrom(
-                                minimumSize: const Size(260, 50),
-                                backgroundColor: Colors.teal[600],
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(30),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                          ],
-                        ),
-
                       ElevatedButton.icon(
                         onPressed: () {
                           Navigator.push(

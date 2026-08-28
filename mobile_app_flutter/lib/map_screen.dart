@@ -40,7 +40,7 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _fetchLatestLocation() async {
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.8.229:5000/get_latest_location'),
+        Uri.parse('http://192.168.1.103:5000/get_latest_location'),
       );
 
       if (response.statusCode == 200) {
