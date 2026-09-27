@@ -33,7 +33,7 @@ train_datagen = ImageDataGenerator(
     validation_split=0.2 
 )
 
-# Validation  Augmentation  (Rescale පමණයි)
+# Validation  Augmentation  (Rescale only)
 val_datagen = ImageDataGenerator(
     rescale=1./255,
     validation_split=0.2 
@@ -65,7 +65,7 @@ class_weights = dict(enumerate(weights))
 print(f"Class Weights Applied: {class_weights}")
 
 # ==========================================
-# 3. Model Architecture (SE Block සමඟ)
+# 3. Model Architecture (SE Block)
 # ==========================================
 base_model = DenseNet121(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
 base_model.trainable = False
@@ -74,7 +74,7 @@ inputs = Input(shape=(224, 224, 3))
 x = base_model(inputs, training=False)
 x = GlobalAveragePooling2D()(x)
 
-# Squeeze-and-Excitation (SE) Block (පසුබිම නොසලකා කොළයට පමණක් අවධානය දීමට)
+# Squeeze-and-Excitation (SE) Block
 se = Dense(x.shape[-1] // 16, activation='relu')(x)
 se = Dense(x.shape[-1], activation='sigmoid')(se)
 x = Multiply()([x, se])
@@ -97,7 +97,7 @@ model_save_path = 'models/rice_binary_disease_and_deficiency.h5'
 checkpoint = ModelCheckpoint(model_save_path, monitor='val_accuracy', save_best_only=True, mode='max', verbose=1)
 early_stop = EarlyStopping(monitor='val_loss', patience=7, restore_best_weights=True)
 
-print("\n🚀 Starting Initial Training (Phase 1)...")
+print("\n Starting Initial Training (Phase 1)...")
 model.fit(
     train_generator, 
     epochs=10, 
@@ -109,12 +109,11 @@ model.fit(
 # ==========================================
 # 5. Phase 2: Fine-Tuning
 # ==========================================
-print("\n🔥 Starting Fine-Tuning (Phase 2)...")
+print("\n Starting Fine-Tuning (Phase 2)...")
 base_model.trainable = True
 for layer in base_model.layers[:-50]: # අන්තිම Layers 50 පමණක් Train වීමට දීම
     layer.trainable = False
 
-# Learning Rate එක අඩු වූ විට ස්වයංක්‍රීයව පාලනය කිරීම
 lr_callback = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=1e-7, verbose=1)
 
 model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-5), 
@@ -154,8 +153,8 @@ def save_matrix_and_report():
         f.write("Binary Model Classification Report\n")
         f.write("====================================\n\n")
         f.write(report)
-    print("✅ Reports and Matrix saved successfully in the 'reports' folder.")
+    print("Reports and Matrix saved successfully in the 'reports' folder.")
 
 save_matrix_and_report()
 model.save(model_save_path)
-print("🎉 Training Completely Finished!")
+print("Training Completely Finished!")

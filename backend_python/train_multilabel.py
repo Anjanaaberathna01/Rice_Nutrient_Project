@@ -27,14 +27,14 @@ df['image_path'] = df['image_path'].str.replace('\\', '/', regex=False)
 df = df.sample(frac=1, random_state=42).reset_index(drop=True)
 classes = sorted(df['label'].unique())
 
-# Dataframe එක 80% (Train) සහ 20% (Validation) ලෙස වෙන් කිරීම
+# Dataframe 80% (Train) and 20% (Validation)   
 split_index = int(len(df) * 0.8)
 train_df = df.iloc[:split_index]
 val_df = df.iloc[split_index:]
 
-# 3. Data Generators (නිවැරදි කළ ක්‍රමය)
+# 3. Data Generators
 
-# Training සඳහා පමණක් Augmentation යෙදීම (Zoom සහ Shift ඇතුළත්ව)
+# in training, we use data augmentation to improve generalization
 train_datagen = ImageDataGenerator(
     preprocessing_function=preprocess_input,
     rotation_range=20,
@@ -45,7 +45,6 @@ train_datagen = ImageDataGenerator(
     fill_mode='nearest'
 )
 
-# Validation සඳහා Augmentation භාවිතා නොකෙරේ
 val_datagen = ImageDataGenerator(
     preprocessing_function=preprocess_input
 )
@@ -91,7 +90,7 @@ model = models.Model(inputs, outputs)
 model.compile(optimizer=optimizers.Adam(learning_rate=1e-3), 
               loss='categorical_crossentropy', metrics=['accuracy'])
 
-print("\n🚀 MobileNetV2: Phase 1 Starting...")
+print("\n MobileNetV2: Phase 1 Starting...")
 h1 = model.fit(train_gen, validation_data=val_gen, epochs=10, class_weight=class_weights)
 
 # 7. Phase 2: Fine-Tuning
@@ -103,7 +102,7 @@ lr_callback = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.
 model.compile(optimizer=optimizers.Adam(learning_rate=1e-5), 
               loss='categorical_crossentropy', metrics=['accuracy'])
 
-print("\n🔥 MobileNetV2: Phase 2 Fine-Tuning...")
+print("\n MobileNetV2: Phase 2 Fine-Tuning...")
 h2 = model.fit(train_gen, validation_data=val_gen, epochs=20, 
               class_weight=class_weights, callbacks=[lr_callback])
 
@@ -129,6 +128,6 @@ def save_reports(h1, h2, model, val_gen):
 
     with open(f'{REPORTS_DIR}/mobilenet_report.txt', 'w') as f:
         f.write(classification_report(val_gen.classes, preds, target_names=classes))
-    print(f"✅ MobileNetV2 Reports saved in {REPORTS_DIR}")
+    print(f" MobileNetV2 Reports saved in {REPORTS_DIR}")
 
 save_reports(h1, h2, model, val_gen)

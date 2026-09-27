@@ -7,7 +7,7 @@ from rembg import remove
 from PIL import Image
 import io
 
-# 1. Classes සහ Settings සකස් කිරීම
+# set the image size and class names
 IMG_SIZE = (224, 224)
 CLASS_NAMES = [
     'Bacterial_Leaf_Blight', 'Brown_Spot', 'Healthy', 'Leaf_Blast', 
@@ -15,7 +15,7 @@ CLASS_NAMES = [
     'Potassium_Deficiency', 'Sheath_Blight'
 ]
 
-# Indices
+# Indices for disease and deficiency classes
 DEFICIENCY_INDICES = [2, 5, 6, 7] 
 DISEASE_INDICES = [0, 1, 3, 4, 8]  
 
@@ -23,7 +23,7 @@ print("Models Loading... Please wait.")
 # Softmax Binary Model Load
 binary_model = tf.keras.models.load_model('models/rice_binary_disease_and_deficiency.h5', compile=False)
 
-# Ensemble Models Load (MobileNet වෙනුවට EfficientNetB0 යොදා ඇත)
+# Ensemble Models Load
 model_efficient = tf.keras.models.load_model('models/rice_multilabel_model_efficientnetb0.h5', compile=False)
 model_dense = tf.keras.models.load_model('models/rice_multilabel_model_densenet121.h5', compile=False)
 model_inception = tf.keras.models.load_model('models/rice_multilabel_model_inceptionv3.h5', compile=False)
@@ -79,7 +79,7 @@ def predict_ensemble(image_path):
     p_d = model_dense.predict(in_d, verbose=0)[0]
     p_i = model_inception.predict(in_i, verbose=0)[0]
 
-    # Fixed Weights යෙදීම (EfficientNet=0.2, DenseNet=0.4, Inception=0.4)
+    # Fixed Weights
     final_preds = (p_e * 0.2) + (p_d * 0.4) + (p_i * 0.4)
 
     # --- Smart Soft-Filtering Logic ---

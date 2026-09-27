@@ -8,25 +8,24 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator # type: igno
 from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
 from sklearn.preprocessing import label_binarize
 
-# මොඩල් 3 ට අදාළ නිවැරදි Preprocessing Functions වෙන වෙනම ඉම්පෝට් කිරීම
 from tensorflow.keras.applications.efficientnet import preprocess_input as preprocess_efficient # type: ignore
 from tensorflow.keras.applications.densenet import preprocess_input as preprocess_dense # type: ignore
 from tensorflow.keras.applications.inception_v3 import preprocess_input as preprocess_inception # type: ignore
 
-# 1. Paths සකස් කිරීම
+# 1.  select the test dataset directory and report directory
 test_data_dir = 'dataset/cleaned_test_data'
 report_dir = 'reports/ensemble'
 
-# 'reports' ෆෝල්ඩරය නැත්නම් එය ස්වයංක්‍රීයව සෑදීම
+# 'reports' 
 os.makedirs(report_dir, exist_ok=True)
 
-# 2. පුහුණු කළ මොඩල් 3 ලෝඩ් කිරීම
+# 2. load the trained models (EfficientNetB0, DenseNet121, InceptionV3)
 print("Loading trained models...")
 m_efficient = load_model('models/rice_multilabel_model_efficientnetb0.h5')
 m_dense = load_model('models/rice_multilabel_model_densenet121.h5')
 m_inception = load_model('models/rice_multilabel_model_inceptionv3.h5')
 
-# 3. එක් එක් මොඩල් එකට අදාළ නිවැරදි Data Generators වෙන වෙනම සෑදීම (Shuffle=False අනිවාර්යයි)
+# 3. define the class labels  
 print("Loading test datasets with correct model-specific preprocessing...")
 
 gen_efficient = ImageDataGenerator(preprocessing_function=preprocess_efficient).flow_from_directory(
@@ -44,7 +43,7 @@ gen_inception = ImageDataGenerator(preprocessing_function=preprocess_inception).
 class_labels = list(gen_dense.class_indices.keys())
 true_classes = gen_dense.classes
 
-# 4. මොඩල් තුනෙන් අදාළ Generators හරහා වෙන වෙනම අනාවැකි ලබා ගැනීම
+# 4. predict the test dataset using each model
 print("Predicting with EfficientNetB0...")
 pred_eff = m_efficient.predict(gen_efficient, verbose=1)
 
@@ -55,7 +54,7 @@ print("Predicting with InceptionV3...")
 pred_i = m_inception.predict(gen_inception, verbose=1)
 
 # ==========================================
-# 5. ස්ථාවර බර (Fixed Weights) යෙදීම සහ Ensemble Logic එක ක්‍රියාත්මක කිරීම
+# 5. Set fixed weights for ensemble prediction
 # ==========================================
 w_dense = 0.4
 w_inception = 0.4
@@ -63,16 +62,16 @@ w_efficient = 0.2
 
 print(f"\nApplying Fixed Weights: DenseNet121={w_dense}, InceptionV3={w_inception}, EfficientNetB0={w_efficient}")
 
-# මොඩල් තුනේම දායකත්වයෙන් Ensemble Prediction සිදු කිරීම
+#   Ensemble Prediction 
 ensemble_preds = (pred_d * w_dense) + (pred_i * w_inception) + (pred_eff * w_efficient)
 predicted_classes = np.argmax(ensemble_preds, axis=1)
 
-# සමස්ත Accuracy එක මැනීම
+#  Accuracy 
 current_acc = accuracy_score(true_classes, predicted_classes)
 print(f" Ensemble Accuracy with Fixed Weights: {current_acc*100:.2f}%")
 
 # ==========================================
-# 6. Classification Report එක Save කිරීම
+# 6. Classification Report  Save
 # ==========================================
 report_text = classification_report(true_classes, predicted_classes, target_names=class_labels)
 report_path = os.path.join(report_dir, 'classification_report.txt')
@@ -84,7 +83,7 @@ with open(report_path, 'w') as f:
 print(f" Classification Report saved to: {report_path}")
 
 # ==========================================
-# 7. Confusion Matrix එක පින්තූරයක් ලෙස Save කිරීම
+# 7. To save Confusion Matrix  
 # ==========================================
 cm = confusion_matrix(true_classes, predicted_classes)
 plt.figure(figsize=(10, 8))
@@ -101,7 +100,7 @@ plt.close()
 print(f" Confusion Matrix saved to: {cm_path}")
 
 # ==========================================
-# 8. Multi-Class ROC Curve එක පින්තූරයක් ලෙස Save කිරීම
+# 8. To save ROC Curve for each class
 # ==========================================
 y_test_bin = label_binarize(true_classes, classes=range(len(class_labels)))
 n_classes = y_test_bin.shape[1]

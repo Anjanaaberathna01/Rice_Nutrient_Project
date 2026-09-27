@@ -64,7 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _fetchDivisionsFromBackend() async {
     try {
       var response = await http.get(
-        Uri.parse('http://192.168.1.103:5000/api/get_divisions'),
+        Uri.parse('http://192.168.1.102:5000/api/get_divisions'),
       );
 
       if (response.statusCode == 200) {
@@ -172,7 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _lng = position.longitude;
 
       // 1. Predict API Call
-      var uri = Uri.parse('http://192.168.1.103:5000/predict');
+      var uri = Uri.parse('http://192.168.1.102:5000/predict');
       var request = http.MultipartRequest('POST', uri);
 
       request.files.add(
@@ -240,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ) async {
     try {
       var uri = Uri.parse(
-        'http://192.168.1.103:5000/validate_and_recommend_fertilizer',
+        'http://192.168.1.102:5000/validate_and_recommend_fertilizer',
       );
 
       var response = await http.post(
