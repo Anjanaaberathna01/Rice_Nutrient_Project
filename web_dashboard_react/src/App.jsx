@@ -21,26 +21,11 @@ function App() {
 
   const [editingId, setEditingId] = useState(null);
 
-  const [rulesData, setRulesData] = useState([]);
-  const [ruleForm, setRuleForm] = useState({
-    irrigation_type: "Irrigated",
-    crop_age_months: 3.5,
-    nutrient: "N",
-    soil_level_min: 0,
-    soil_level_max: 999,
-    stage: "Week_2",
-    fertilizer_name: "Urea",
-    amount_kg_acre: 20
-  });
-
-  const [editingRuleId, setEditingRuleId] = useState(null);
-
   const API_URL = "http://192.168.1.103:5000";
 
   useEffect(() => {
     fetchLocations();
     fetchSoilData();
-    fetchRulesData();
   }, []);
 
   const fetchLocations = async () => {
@@ -60,15 +45,6 @@ function App() {
       setSoilData(res.data);
     } catch (error) {
       console.error("Error fetching soil data:", error);
-    }
-  };
-
-  const fetchRulesData = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/api/rules`);
-      setRulesData(res.data);
-    } catch (error) {
-      console.error("Error fetching rules data:", error);
     }
   };
 
@@ -101,8 +77,7 @@ function App() {
   );
 
   const defOrange = deficiencies.filter(
-    (loc) =>
-      loc.marker_color === "ORANGE" || !loc.marker_color
+    (loc) => loc.marker_color === "ORANGE" || !loc.marker_color
   );
 
   const RecordCard = ({ loc }) => (
@@ -147,14 +122,12 @@ function App() {
           `${API_URL}/api/soil/${editingId}`,
           formData
         );
-
         alert("Soil record updated successfully!");
       } else {
         await axios.post(
           `${API_URL}/api/soil`,
           formData
         );
-
         alert("New soil record added successfully!");
       }
 
@@ -206,95 +179,9 @@ function App() {
         await axios.delete(
           `${API_URL}/api/soil/${id}`
         );
-
         fetchSoilData();
-
       } catch (error) {
-        console.error(
-          "Error deleting soil data:",
-          error
-        );
-      }
-    }
-  };
-
-  // =========================
-  // FERTILIZER RULE CRUD
-  // =========================
-
-  const handleRuleChange = (e) => {
-    setRuleForm({
-      ...ruleForm,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  const handleRuleSubmit = async (e) => {
-    e.preventDefault();
-
-    try {
-      if (editingRuleId !== null) {
-        await axios.put(
-          `${API_URL}/api/rules/${editingRuleId}`,
-          ruleForm
-        );
-
-        alert("Fertilizer rule updated successfully!");
-      } else {
-        await axios.post(
-          `${API_URL}/api/rules`,
-          ruleForm
-        );
-
-        alert("New fertilizer rule added successfully!");
-      }
-
-      setEditingRuleId(null);
-      fetchRulesData();
-
-    } catch (error) {
-      console.error(
-        "Error saving rule data:",
-        error
-      );
-
-      alert("Error processing rule.");
-    }
-  };
-
-  const editRuleRow = (row) => {
-    setRuleForm({
-      irrigation_type: row.irrigation_type,
-      crop_age_months: row.crop_age_months,
-      nutrient: row.nutrient,
-      soil_level_min: row.soil_level_min,
-      soil_level_max: row.soil_level_max,
-      stage: row.stage,
-      fertilizer_name: row.fertilizer_name,
-      amount_kg_acre: row.amount_kg_acre
-    });
-
-    setEditingRuleId(row.id);
-  };
-
-  const deleteRuleRow = async (id) => {
-    if (
-      window.confirm(
-        "Are you sure you want to delete this fertilizer rule?"
-      )
-    ) {
-      try {
-        await axios.delete(
-          `${API_URL}/api/rules/${id}`
-        );
-
-        fetchRulesData();
-
-      } catch (error) {
-        console.error(
-          "Error deleting rule:",
-          error
-        );
+        console.error("Error deleting soil data:", error);
       }
     }
   };
@@ -538,11 +425,6 @@ function App() {
             repeat(3, minmax(0, 1fr));
         }
 
-        .rule-form {
-          grid-template-columns:
-            repeat(4, minmax(0, 1fr));
-        }
-
         .form-control {
           width: 100%;
 
@@ -618,11 +500,6 @@ function App() {
           color: #fff;
         }
 
-        .btn-rule-add {
-          background: #28a745;
-          color: #fff;
-        }
-
         .btn-update {
           background: #ffc107;
           color: #000;
@@ -634,14 +511,14 @@ function App() {
         }
 
         .btn-edit {
-          background: #17a2b8;
+          background: #1ab817;
           color: #fff;
 
           padding: 7px 12px;
         }
 
         .btn-delete {
-          background: #dc3545;
+          background: #35dc64;
           color: #fff;
 
           padding: 7px 12px;
@@ -728,7 +605,6 @@ function App() {
 
           .map-layout {
             grid-template-columns: 1fr;
-
             height: auto;
           }
 
@@ -741,11 +617,6 @@ function App() {
           }
 
           .soil-form {
-            grid-template-columns:
-              repeat(2, minmax(0, 1fr));
-          }
-
-          .rule-form {
             grid-template-columns:
               repeat(2, minmax(0, 1fr));
           }
@@ -783,10 +654,8 @@ function App() {
             font-size: 20px;
           }
 
-          .soil-form,
-          .rule-form {
+          .soil-form {
             grid-template-columns: 1fr;
-
             padding: 15px;
           }
 
@@ -796,7 +665,6 @@ function App() {
 
           .form-actions .btn {
             flex: 1;
-
             min-width: 120px;
           }
 
@@ -821,16 +689,10 @@ function App() {
 
       <header className="admin-header">
         <div>
-
-          <h1>
-            Admin Panel
-          </h1>
-
+          <h1>Admin Panel</h1>
           <p>
-            Real-time field triangulation,
-            soil data and fertilizer rule management
+            Real-time field triangulation and soil data management
           </p>
-
         </div>
       </header>
 
@@ -841,237 +703,108 @@ function App() {
         ========================= */}
 
         <section className="section-card">
-
           <h2 className="section-title">
             Live Field Triangulation
           </h2>
 
           {loading ? (
-
-            <p>
-              Loading Map Data...
-            </p>
-
+            <p>Loading Map Data...</p>
           ) : (
-
             <div className="map-layout">
 
               {/* RECORDS */}
-
               <div className="records-panel">
-
                 <h3 className="records-heading orange">
                   Diseases (Pending) - {diseases.length}
                 </h3>
-
                 {diseases.length === 0 ? (
-
-                  <p className="empty-text">
-                    No disease records found.
-                  </p>
-
+                  <p className="empty-text">No disease records found.</p>
                 ) : (
-
                   diseases.map((loc) => (
-                    <RecordCard
-                      key={loc.id}
-                      loc={loc}
-                    />
+                    <RecordCard key={loc.id} loc={loc} />
                   ))
-
                 )}
 
-                <h3
-                  className="records-heading blue"
-                  style={{
-                    marginTop: 25
-                  }}
-                >
+                <h3 className="records-heading blue" style={{ marginTop: 25 }}>
                   Deficiencies - {deficiencies.length}
                 </h3>
 
-                <h4
-                  className="records-heading green"
-                  style={{
-                    marginTop: 10
-                  }}
-                >
-                  Validated (Urea/TSP/MOP) -
-                  {" "}
-                  {defGreen.length}
+                <h4 className="records-heading green" style={{ marginTop: 10 }}>
+                  Validated (Urea/TSP/MOP) - {defGreen.length}
                 </h4>
-
                 {defGreen.length === 0 ? (
-
-                  <p className="empty-text">
-                    No validated records.
-                  </p>
-
+                  <p className="empty-text">No validated records.</p>
                 ) : (
-
                   defGreen.map((loc) => (
-                    <RecordCard
-                      key={loc.id}
-                      loc={loc}
-                    />
+                    <RecordCard key={loc.id} loc={loc} />
                   ))
-
                 )}
 
-                <h4
-                  className="records-heading red"
-                  style={{
-                    marginTop: 15
-                  }}
-                >
-                  Rejected (Safe) -
-                  {" "}
-                  {defRed.length}
+                <h4 className="records-heading red" style={{ marginTop: 15 }}>
+                  Rejected (Safe) - {defRed.length}
                 </h4>
-
                 {defRed.length === 0 ? (
-
-                  <p className="empty-text">
-                    No rejected records.
-                  </p>
-
+                  <p className="empty-text">No rejected records.</p>
                 ) : (
-
                   defRed.map((loc) => (
-                    <RecordCard
-                      key={loc.id}
-                      loc={loc}
-                    />
+                    <RecordCard key={loc.id} loc={loc} />
                   ))
-
                 )}
 
-                <h4
-                  className="records-heading orange"
-                  style={{
-                    marginTop: 15
-                  }}
-                >
-                  Pending (No Soil Data) -
-                  {" "}
-                  {defOrange.length}
+                <h4 className="records-heading orange" style={{ marginTop: 15 }}>
+                  Pending (No Soil Data) - {defOrange.length}
                 </h4>
-
                 {defOrange.length === 0 ? (
-
-                  <p className="empty-text">
-                    No pending records.
-                  </p>
-
+                  <p className="empty-text">No pending records.</p>
                 ) : (
-
                   defOrange.map((loc) => (
-                    <RecordCard
-                      key={loc.id}
-                      loc={loc}
-                    />
+                    <RecordCard key={loc.id} loc={loc} />
                   ))
-
                 )}
-
               </div>
 
               {/* MAP */}
-
               <div className="map-wrapper">
-
                 <MapContainer
-                  center={[
-                    8.3114,
-                    80.4037
-                  ]}
+                  center={[8.3114, 80.4037]}
                   zoom={10}
-                  style={{
-                    height: "100%",
-                    width: "100%"
-                  }}
+                  style={{ height: "100%", width: "100%" }}
                 >
-
                   <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     attribution="&copy; OpenStreetMap"
                   />
-
                   {locations.map((loc) => (
-
                     <CircleMarker
                       key={loc.id}
                       center={[
-                        parseFloat(
-                          loc.latitude
-                        ),
-                        parseFloat(
-                          loc.longitude
-                        )
+                        parseFloat(loc.latitude),
+                        parseFloat(loc.longitude)
                       ]}
                       radius={8}
                       pathOptions={{
-                        fillColor:
-                          getMarkerColor(
-                            loc.marker_color
-                          ),
-
+                        fillColor: getMarkerColor(loc.marker_color),
                         color: "#fff",
-
                         weight: 2,
-
                         fillOpacity: 0.9
                       }}
                     >
-
                       <Popup>
-
-                        <div
-                          style={{
-                            fontSize: "14px"
-                          }}
-                        >
-
-                          <b>
-                            Prediction:
-                          </b>{" "}
-                          {loc.prediction}
-
+                        <div style={{ fontSize: "14px" }}>
+                          <b>Prediction:</b> {loc.prediction}
                           <br />
-
-                          <b>
-                            Status:
-                          </b>{" "}
-                          {loc.status}
-
+                          <b>Status:</b> {loc.status}
                           <br />
-
-                          <b>
-                            Confidence:
-                          </b>{" "}
-                          {(
-                            parseFloat(
-                              loc.confidence
-                            ) * 100
-                          ).toFixed(1)}
-                          %
-
+                          <b>Confidence:</b>{" "}
+                          {(parseFloat(loc.confidence) * 100).toFixed(1)}%
                         </div>
-
                       </Popup>
-
                     </CircleMarker>
-
                   ))}
-
                 </MapContainer>
-
               </div>
-
             </div>
-
           )}
-
         </section>
 
         {/* =========================
@@ -1079,16 +812,11 @@ function App() {
         ========================= */}
 
         <section className="section-card">
-
           <h2 className="section-title blue">
             Soil Data Management
           </h2>
 
-          <form
-            onSubmit={handleCsvSubmit}
-            className="data-form soil-form"
-          >
-
+          <form onSubmit={handleCsvSubmit} className="data-form soil-form">
             <input
               className="form-control"
               type="text"
@@ -1098,7 +826,6 @@ function App() {
               onChange={handleFormChange}
               required
             />
-
             <input
               className="form-control"
               type="text"
@@ -1108,7 +835,6 @@ function App() {
               onChange={handleFormChange}
               required
             />
-
             <input
               className="form-control"
               type="number"
@@ -1119,7 +845,6 @@ function App() {
               onChange={handleFormChange}
               required
             />
-
             <input
               className="form-control"
               type="number"
@@ -1130,72 +855,51 @@ function App() {
               onChange={handleFormChange}
               required
             />
-
             <input
               className="form-control"
               type="number"
               step="0.1"
               name="phosphorus_value"
               placeholder="Phosphorus (mg/kg)"
-              value={
-                formData.phosphorus_value
-              }
+              value={formData.phosphorus_value}
               onChange={handleFormChange}
               required
             />
-
             <input
               className="form-control"
               type="number"
               step="0.1"
               name="potassium_value"
               placeholder="Potassium (mg/kg)"
-              value={
-                formData.potassium_value
-              }
+              value={formData.potassium_value}
               onChange={handleFormChange}
               required
             />
-
             <input
               className="form-control"
               type="number"
               step="0.1"
               name="organic_matter_status"
               placeholder="Organic Matter (%)"
-              value={
-                formData.organic_matter_status
-              }
+              value={formData.organic_matter_status}
               onChange={handleFormChange}
               required
             />
 
             <div className="form-actions">
-
               <button
                 type="submit"
-                className={`btn ${
-                  editingId !== null
-                    ? "btn-update"
-                    : "btn-add"
-                }`}
+                className={`btn ${editingId !== null ? "btn-update" : "btn-add"}`}
               >
-
-                {editingId !== null
-                  ? "Update Record"
-                  : "Add Soil Record"}
-
+                {editingId !== null ? "Update Record" : "Add Soil Record"}
               </button>
 
               {editingId !== null && (
-
                 <button
                   type="button"
                   className="btn btn-cancel"
                   onClick={() => {
-
                     setEditingId(null);
-
                     setFormData({
                       ds_division: "",
                       gn_division: "",
@@ -1205,408 +909,61 @@ function App() {
                       potassium_value: "",
                       organic_matter_status: ""
                     });
-
                   }}
                 >
                   Cancel
                 </button>
-
               )}
-
             </div>
-
           </form>
 
           <div className="table-wrapper">
-
             <table className="data-table">
-
               <thead>
-
                 <tr>
-
-                  <th>
-                    DS Division
-                  </th>
-
-                  <th>
-                    GN Division
-                  </th>
-
-                  <th>
-                    pH
-                  </th>
-
-                  <th>
-                    EC
-                  </th>
-
-                  <th>
-                    Phosphorus
-                  </th>
-
-                  <th>
-                    Potassium
-                  </th>
-
-                  <th>
-                    Organic Matter
-                  </th>
-
-                  <th className="action-cell">
-                    Actions
-                  </th>
-
+                  <th>DS Division</th>
+                  <th>GN Division</th>
+                  <th>pH</th>
+                  <th>EC</th>
+                  <th>Phosphorus</th>
+                  <th>Potassium</th>
+                  <th>Organic Matter</th>
+                  <th className="action-cell">Actions</th>
                 </tr>
-
               </thead>
-
               <tbody>
-
-                {soilData.map(
-                  (row, index) => (
-
-                    <tr key={index}>
-
-                      <td>
-                        {row.ds_division}
-                      </td>
-
-                      <td>
-                        {row.gn_division}
-                      </td>
-
-                      <td>
-                        {row.ph_value}
-                      </td>
-
-                      <td>
-                        {row.ec_value}
-                      </td>
-
-                      <td>
-                        {row.phosphorus_value}
-                      </td>
-
-                      <td>
-                        {row.potassium_value}
-                      </td>
-
-                      <td>
-                        {row.organic_matter_status}
-                      </td>
-
-                      <td className="action-cell">
-
-                        <button
-                          onClick={() =>
-                            editRow(row)
-                          }
-                          className="btn btn-edit"
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            deleteRow(row.id)
-                          }
-                          className="btn btn-delete"
-                          style={{
-                            marginLeft: 5
-                          }}
-                        >
-                          Delete
-                        </button>
-
-                      </td>
-
-                    </tr>
-
-                  )
-                )}
-
+                {soilData.map((row, index) => (
+                  <tr key={index}>
+                    <td>{row.ds_division}</td>
+                    <td>{row.gn_division}</td>
+                    <td>{row.ph_value}</td>
+                    <td>{row.ec_value}</td>
+                    <td>{row.phosphorus_value}</td>
+                    <td>{row.potassium_value}</td>
+                    <td>{row.organic_matter_status}</td>
+                    <td className="action-cell">
+                      <button
+                        onClick={() => editRow(row)}
+                        className="btn btn-edit"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => deleteRow(row.id)}
+                        className="btn btn-delete"
+                        style={{ marginLeft: 5 }}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
-
             </table>
-
           </div>
-
-        </section>
-
-        {/* =========================
-            FERTILIZER RULES
-        ========================= */}
-
-        <section className="section-card">
-
-          <h2 className="section-title">
-            Fertilizer Rules Management
-          </h2>
-
-          <form
-            onSubmit={handleRuleSubmit}
-            className="data-form rule-form"
-          >
-
-            <input
-              className="form-control"
-              type="text"
-              name="irrigation_type"
-              placeholder="Irrigation (Irrigated/Rainfed)"
-              value={
-                ruleForm.irrigation_type
-              }
-              onChange={handleRuleChange}
-              required
-            />
-
-            <input
-              className="form-control"
-              type="number"
-              step="0.1"
-              name="crop_age_months"
-              placeholder="Crop Age (Months)"
-              value={
-                ruleForm.crop_age_months
-              }
-              onChange={handleRuleChange}
-              required
-            />
-
-            <input
-              className="form-control"
-              type="text"
-              name="nutrient"
-              placeholder="Nutrient (N/P/K)"
-              value={ruleForm.nutrient}
-              onChange={handleRuleChange}
-              required
-            />
-
-            <input
-              className="form-control"
-              type="number"
-              step="0.1"
-              name="soil_level_min"
-              placeholder="Soil Level Min"
-              value={
-                ruleForm.soil_level_min
-              }
-              onChange={handleRuleChange}
-              required
-            />
-
-            <input
-              className="form-control"
-              type="number"
-              step="0.1"
-              name="soil_level_max"
-              placeholder="Soil Level Max"
-              value={
-                ruleForm.soil_level_max
-              }
-              onChange={handleRuleChange}
-              required
-            />
-
-            <input
-              className="form-control"
-              type="text"
-              name="stage"
-              placeholder="Stage (Week_2/Basal)"
-              value={ruleForm.stage}
-              onChange={handleRuleChange}
-              required
-            />
-
-            <input
-              className="form-control"
-              type="text"
-              name="fertilizer_name"
-              placeholder="Fertilizer Name (Urea/TSP/MOP)"
-              value={
-                ruleForm.fertilizer_name
-              }
-              onChange={handleRuleChange}
-              required
-            />
-
-            <input
-              className="form-control"
-              type="number"
-              step="0.1"
-              name="amount_kg_acre"
-              placeholder="Amount (kg/acre)"
-              value={
-                ruleForm.amount_kg_acre
-              }
-              onChange={handleRuleChange}
-              required
-            />
-
-            <div className="form-actions">
-
-              <button
-                type="submit"
-                className={`btn ${
-                  editingRuleId !== null
-                    ? "btn-update"
-                    : "btn-rule-add"
-                }`}
-              >
-
-                {editingRuleId !== null
-                  ? "Update Rule"
-                  : "Add Rule"}
-
-              </button>
-
-              {editingRuleId !== null && (
-
-                <button
-                  type="button"
-                  className="btn btn-cancel"
-                  onClick={() =>
-                    setEditingRuleId(null)
-                  }
-                >
-                  Cancel
-                </button>
-
-              )}
-
-            </div>
-
-          </form>
-
-          <div className="table-wrapper">
-
-            <table className="data-table">
-
-              <thead>
-
-                <tr>
-
-                  <th>
-                    Irrigation
-                  </th>
-
-                  <th>
-                    Age
-                  </th>
-
-                  <th>
-                    Nutrient
-                  </th>
-
-                  <th>
-                    Min Soil
-                  </th>
-
-                  <th>
-                    Max Soil
-                  </th>
-
-                  <th>
-                    Stage
-                  </th>
-
-                  <th>
-                    Fertilizer
-                  </th>
-
-                  <th>
-                    kg/acre
-                  </th>
-
-                  <th className="action-cell">
-                    Actions
-                  </th>
-
-                </tr>
-
-              </thead>
-
-              <tbody>
-
-                {rulesData.map(
-                  (row, index) => (
-
-                    <tr key={index}>
-
-                      <td>
-                        {row.irrigation_type}
-                      </td>
-
-                      <td>
-                        {row.crop_age_months}
-                      </td>
-
-                      <td>
-                        {row.nutrient}
-                      </td>
-
-                      <td>
-                        {row.soil_level_min}
-                      </td>
-
-                      <td>
-                        {row.soil_level_max}
-                      </td>
-
-                      <td>
-                        {row.stage}
-                      </td>
-
-                      <td>
-                        {row.fertilizer_name}
-                      </td>
-
-                      <td>
-                        {row.amount_kg_acre}
-                      </td>
-
-                      <td className="action-cell">
-
-                        <button
-                          onClick={() =>
-                            editRuleRow(row)
-                          }
-                          className="btn btn-edit"
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            deleteRuleRow(row.id)
-                          }
-                          className="btn btn-delete"
-                          style={{
-                            marginLeft: 5
-                          }}
-                        >
-                          Delete
-                        </button>
-
-                      </td>
-
-                    </tr>
-
-                  )
-                )}
-
-              </tbody>
-
-            </table>
-
-          </div>
-
         </section>
 
       </main>
-
     </div>
   );
 }

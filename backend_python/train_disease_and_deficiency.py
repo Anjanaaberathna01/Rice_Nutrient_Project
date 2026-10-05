@@ -65,7 +65,7 @@ class_weights = dict(enumerate(weights))
 print(f"Class Weights Applied: {class_weights}")
 
 # ==========================================
-# 3. Model Architecture (SE Block)
+# 3. Model Architecture
 # ==========================================
 base_model = DenseNet121(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
 base_model.trainable = False
@@ -111,7 +111,7 @@ model.fit(
 # ==========================================
 print("\n Starting Fine-Tuning (Phase 2)...")
 base_model.trainable = True
-for layer in base_model.layers[:-50]: # අන්තිම Layers 50 පමණක් Train වීමට දීම
+for layer in base_model.layers[:-50]: # Freeze the first 50 layers of DenseNet121
     layer.trainable = False
 
 lr_callback = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=1e-7, verbose=1)

@@ -30,6 +30,7 @@ def get_db_connection():
 def save_to_db(prediction, category, confidence, dis_score, def_score, lat, lng):
     conn = None
     cursor = None
+    # Insert the prediction data into the database ("leaf_analysis" table)
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -47,7 +48,9 @@ def save_to_db(prediction, category, confidence, dis_score, def_score, lat, lng)
         if cursor: cursor.close()
         if conn: conn.close()
 
+#===============================================
 # Load the pre-trained models 
+#===============================================
 try:
     RICE_VS_NONRICE_MODEL = tf.keras.models.load_model('models/rice_binary_model.h5', compile=False)
     DISEASE_VS_DEFICIENCY_MODEL = tf.keras.models.load_model('models/rice_binary_disease_and_deficiency.h5', compile=False)
@@ -66,6 +69,7 @@ DISEASE_INDICES = [0, 1, 3, 4, 8]
 def generate_heatmap_base64(img_np, model_dense):
     try:
         img_resized = cv2.resize(img_np, (224,224))
+        # Preprocess the image for DenseNet
         img_array = np.expand_dims(tf.keras.applications.densenet.preprocess_input(img_resized.copy()), axis=0)
         base_model = model_dense.get_layer('densenet121')
         last_conv_layer = base_model.layers[-1]
@@ -90,7 +94,7 @@ def generate_heatmap_base64(img_np, model_dense):
 def get_realtime_weather(lat, lng):
     try:
         api_key = "e1d3fecabdd809b3bd85c53a5ffeea7d"
-        url = f"http://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lng}&appid={api_key}&units=metric"
+        url = f"http://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lng}&appid={api_key}&units=metric" #units=metric for Celsius
         
         response = requests.get(url)
         if response.status_code == 200:
@@ -104,7 +108,7 @@ def get_realtime_weather(lat, lng):
             current_entry = list_data[0] if list_data else {}
             temperature = current_entry.get('main', {}).get('temp', 28.0)
             relative_humidity = current_entry.get('main', {}).get('humidity', 75.0)
-            wind_speed = current_entry.get('wind', {}).get('speed', 0.0) * 3.6  
+            wind_speed = current_entry.get('wind', {}).get('speed', 0.0) * 3.6  # Convert m/s to km/h
             
 
         # Calculate the average temperature during the night
@@ -116,23 +120,22 @@ def get_realtime_weather(lat, lng):
                     hour = int(dt_txt.split(' ')[1].split(':')[0])
                     temp = entry.get('main', {}).get('temp')
 
-                    if temp is not None and (hour >= 18 or hour <= 6):
+                    if temp is not None and (hour >= 18 or hour <= 6): #checking for night hours (6 PM to 6 AM)
                         night_temperatures.append(float(temp))
                 except (ValueError, IndexError, TypeError):
                     continue
 
-            # Loop එකෙන් පිටතදී සාමාන්‍ය අගය ගණනය කිරීම (Bug 1 Fixed)
             if night_temperatures:
-                night_temperature = sum(night_temperatures) / len(night_temperatures)
+                night_temperature = sum(night_temperatures) / len(night_temperatures) # Calculate average night temperature by dividing the sum of night temperatures by the number of entries
             else:
                 night_temperature = None
 
 
         # Calculate total rainfall and dry spell count over the forecast period
-
             for entry in list_data:
                 rain = entry.get('rain', {}).get('3h', 0.0)
                 total_rainfall += rain
+                # Check for dry spells (low humidity)
                 if entry.get('main', {}).get('humidity', 50) < 45:
                     dry_spell_count += 1
 
@@ -146,7 +149,9 @@ def get_realtime_weather(lat, lng):
         print("Weather API Error:", e)
         return 0.0, False, 28.0, 75.0, 0.0, None
 
-
+#=========================================================
+# Flask API Endpoints (predict)
+#=========================================================
 @app.route('/predict', methods=['POST'])
 def predict():
     if 'image' not in request.files:
@@ -157,10 +162,10 @@ def predict():
     lng = request.form.get('lng')
 
     try: 
-        clean_raw = remove(img_bytes)
+        clean_raw = remove(img_bytes) # Remove any noise or artifacts from the image using rembg library (U-2-Net model)
         img_pil = Image.open(io.BytesIO(clean_raw)).convert("RGB")
         img_np = np.array(img_pil)
-        img_224 = cv2.resize(img_np, (224,224))
+        img_224 = cv2.resize(img_np, (224,224)) 
         rice_check_input = np.expand_dims(img_224 / 255.0, axis=0)
 
         is_rice_score = float(RICE_VS_NONRICE_MODEL.predict(rice_check_input, verbose=0)[0][0])
@@ -171,6 +176,7 @@ def predict():
         deficiency_prob = float(bin_preds[0])
         disease_prob = float(bin_preds[1])
 
+        # Preprocess the image for each model
         in_m = tf.keras.applications.efficientnet.preprocess_input(img_224.copy().reshape(1,224,224,3))
         in_d = tf.keras.applications.densenet.preprocess_input(img_224.copy().reshape(1,224,224,3))
         in_i = tf.keras.applications.inception_v3.preprocess_input(img_224.copy().reshape(1,224,224,3))
@@ -183,6 +189,7 @@ def predict():
         is_disease = disease_prob > deficiency_prob
         category_label = "Disease" if is_disease else "Deficiency"
 
+        # To set the probabilities of the other category to zero based on the predicted category
         if is_disease:
             for idx in DEFICIENCY_INDICES: final_preds[idx] = 0
         else:
@@ -208,6 +215,9 @@ def predict():
     except Exception as e:
         return jsonify({"status":"error", "message":str(e)}), 500
 
+# =========================================================
+# Get latest location data
+# =========================================================
 @app.route('/get_latest_location', methods=['GET'])
 def get_latest_location():
     try:
@@ -253,7 +263,6 @@ def get_divisions():
 # =========================================================
 # Decision Support System (DSS) - Soil & Weather Validation
 # =========================================================
-
 @app.route('/validate_and_recommend_fertilizer', methods=['POST'])
 def validate_and_recommend_fertilizer():
     try:
@@ -261,7 +270,7 @@ def validate_and_recommend_fertilizer():
         prediction_id = data.get('prediction_id')
         user_gn = data.get('gn_division', '').strip().lower()
         user_ds = data.get('ds_division', '').strip().lower()
-        ai_prediction = data.get('prediction') # example 'Nitrogen_Deficiency'
+        ai_prediction = data.get('prediction') 
         category = data.get('category')        # 'Disease' or 'Deficiency'
         lat = data.get('lat')                  # GPS Latitude
         lng = data.get('lng')                  # GPS Longitude
@@ -356,249 +365,135 @@ def validate_and_recommend_fertilizer():
                 )
 
         # =========================================================
-        # RICE BLAST DISEASE
+        # 2. RICE BLAST DISEASE
         # =========================================================
         elif ai_prediction == 'Leaf_Blast':
 
             evidence_score = 0
             supporting_factors = []
 
-
-            # =====================================================
-            # 1. NIGHT TEMPERATURE
-            # DOA favourable condition: 17-20°C
-            # =====================================================
-
             if night_temperature is not None:
 
                 if 17.0 <= night_temperature <= 20.0:
-
                     evidence_score += 2
-
                     supporting_factors.append(
                         f"රාත්‍රී උෂ්ණත්වය Rice Blast සඳහා "
                         f"හිතකර 17–20°C පරාසයේ පවතී "
                         f"({night_temperature:.1f}°C)"
                     )
-
                 else:
-
                     supporting_factors.append(
                         f"රාත්‍රී උෂ්ණත්වය 17–20°C "
                         f"හිතකර පරාසයෙන් පිටත පවතී "
                         f"({night_temperature:.1f}°C)"
                     )
-
             else:
-
                 supporting_factors.append(
                     "රාත්‍රී උෂ්ණත්ව දත්ත ලබාගත නොහැකි විය"
                 )
-
-
-            # =====================================================
-            # 2. HIGH RELATIVE HUMIDITY
-            # System operational threshold = 80%
-            # =====================================================
-
             if relative_humidity >= 80.0:
-
                 evidence_score += 1
-
                 supporting_factors.append(
                     f"සාපේක්ෂ ආර්ද්‍රතාවය ඉහළ මට්ටමක පවතී "
                     f"({relative_humidity:.1f}%)"
                 )
-
             else:
-
                 supporting_factors.append(
                     f"සාපේක්ෂ ආර්ද්‍රතාවය "
                     f"{relative_humidity:.1f}% කි"
                 )
-
-
-            # =====================================================
-            # 3. RAINFALL
-            # Context ONLY
-            # =====================================================
-
             if recent_rainfall_7d > 0:
-
                 supporting_factors.append(
                     f"පසුගිය forecast කාලය තුළ "
                     f"වර්ෂාපතන තත්ත්වයක් පවතී "
                     f"({recent_rainfall_7d:.1f} mm)"
                 )
-
-
-            # =====================================================
-            # 4. NITROGEN FERTILIZER
-            # IMPORTANT:
-            # NOT USED FOR VALIDATION SCORE
-            #
-            # We only warn the farmer about N fertilizer usage.
-            # =====================================================
-
             nitrogen_warning = (
                 "Rice Blast සඳහා නයිට්‍රජන් / යූරියා පොහොර "
                 "අධික ලෙස යෙදීමෙන් වළකින්න. "
                 "යෙදූ නයිට්‍රජන් පොහොර ප්‍රමාණය "
                 "DOA නිර්දේශිත මාත්‍රාව සමඟ සසඳා බලන්න."
             )
-
-
-            # =====================================================
-            # 5. FINAL VALIDATION
-            # Maximum score = 3
-            #
-            # 3 = VALIDATED
-            # 1-2 = PARTIALLY_VALIDATED
-            # 0 = REJECTED
-            # =====================================================
-
             if evidence_score >= 3:
-
                 validation_status = "VALIDATED"
                 map_color = "GREEN"
-
                 recommendation_text = (
-
                     f"AI මඟින් Rice Blast රෝගය හඳුනාගෙන ඇත. "
-
                     f"පවතින පාරිසරික දත්ත අනුව රෝගයට "
                     f"හිතකර තත්ත්වයන් පවතී: "
-
                     f"{', '.join(supporting_factors)}. "
-
                     f"එබැවින් AI අනාවැකියට ශක්තිමත් "
                     f"පාරිසරික සහායක් පවතී. "
-
                     f"{nitrogen_warning}"
                 )
-
-
             elif evidence_score >= 1:
-
                 validation_status = "PARTIALLY_VALIDATED"
                 map_color = "ORANGE"
-
                 recommendation_text = (
-
                     f"AI මඟින් Rice Blast රෝගය හඳුනාගෙන ඇත. "
-
                     f"නමුත් පවතින පාරිසරික දත්ත මඟින් "
                     f"සීමිත supporting evidence පමණක් පවතී: "
-
                     f"{', '.join(supporting_factors)}. "
-
                     f"එබැවින් අනාවැකිය සම්පූර්ණයෙන් "
                     f"තහවුරු කළ නොහැක. "
-
                     f"{nitrogen_warning}"
                 )
-
-
             else:
-
                 validation_status = "REJECTED"
                 map_color = "RED"
-
                 recommendation_text = (
-
                     f"AI මඟින් Rice Blast රෝගය හඳුනාගෙන ඇත. "
-
                     f"නමුත් පවතින පාරිසරික දත්ත මඟින් "
                     f"Rice Blast සඳහා ප්‍රමාණවත් "
                     f"supporting evidence හමු වී නොමැත. "
-
                     f"{', '.join(supporting_factors)}. "
-
                     f"එබැවින් රෝග ලක්ෂණ නැවත පරීක්ෂා කරන්න. "
-
                     f"{nitrogen_warning}"
                 )
 
         # =========================================================
-        # 5. BROWN SPOT DISEASE
+        # 3. BROWN SPOT DISEASE
         # =========================================================
         elif ai_prediction == 'Brown_Spot':
-
             evidence_score = 0
             supporting_factors = []
-
             # Temperature
             if 16.0 <= temperature <= 36.0:
-
                 evidence_score += 1
-
                 supporting_factors.append(
                     f"පවතින උෂ්ණත්වය Brown Spot සඳහා හිතකර පරාසයේ පවතී "
                     f"({temperature:.1f}°C)"
                 )
-
-            # Humidity (ඔබගේ පද්ධතියේ 'relative_humidity' ලෙස භාවිතා වේ)
+            # Humidity ('relative_humidity' variable is obtained from the weather API)
             if 86.0 <= relative_humidity <= 100.0:
-
                 evidence_score += 1
-
                 supporting_factors.append(
                     f"සාපේක්ෂ ආර්ද්‍රතාවය ඉහළ මට්ටමක පවතී "
                     f"({relative_humidity:.1f}%)"
                 )
-
-            # Drought (ඔබගේ පද්ධතියේ 'is_drought' ලෙස භාවිතා වේ)
-            if is_drought:
-
+            # Drought 
                 evidence_score += 1
-
                 supporting_factors.append(
                     "වියළි / නියං තත්ත්වයක් පවතී"
                 )
-
-            # ---------------------------------------------------------
-            # 2. SECONDARY SOIL EVIDENCE
-            # ---------------------------------------------------------
-            # DOA states that Brown Spot is favoured by soils with
-            # low levels of required nutrients or problem soils,
-            # including high salinity and iron toxicity.
-            #
-            # Therefore soil information is used as supporting
-            # evidence rather than the primary disease criterion.
-            # ---------------------------------------------------------
-
             soil_stress_factors = []
-
-            # Low organic matter as an indicator of poor soil quality (ඔබගේ පද්ධතියේ 'om_val' ලෙස භාවිතා වේ)
+            # Low organic matter as an indicator of poor soil quality ('om_val' variable is obtained from the soil data)
             if om_val < 1.0:
-
                 soil_stress_factors.append(
                     f"පසේ කාබනික ද්‍රව්‍ය මට්ටම අඩුය ({om_val:.1f}%)"
                 )
-
             # High EC / salinity condition
-            # (මතක තබාගන්න: මෙය ක්‍රියාත්මක වීමට ඔබේ CSV එකෙන් 'ec_val' ලබාගන්නා කේතයක් මුලින් තිබිය යුතුය)
             if ec_val > 0.4:
-
                 soil_stress_factors.append(
                     f"පසේ EC අගය ඉහළය ({ec_val:.1f} dS/m)"
                 )
-
             if soil_stress_factors:
-
                 evidence_score += 1
-
                 supporting_factors.extend(soil_stress_factors)
-
-            # ---------------------------------------------------------
-            # 3. FINAL VALIDATION
-            # ---------------------------------------------------------
-
+            #FINAL VALIDATION
             if evidence_score >= 3:
-
                 validation_status = "VALIDATED"
                 map_color = "GREEN"
-
                 recommendation_text = (
                     f"AI මඟින් Brown Spot රෝගය හඳුනාගෙන ඇත. "
                     f"පවතින පාරිසරික හා පාංශු දත්ත මඟින් අනාවැකියට "
@@ -608,12 +503,9 @@ def validate_and_recommend_fertilizer():
                     f"වල් පැළෑටි පාලනය සහ සුදුසු වගා කළමනාකරණ ක්‍රම "
                     f"අනුගමනය කරන්න."
                 )
-
             elif evidence_score >= 1:
-
                 validation_status = "PARTIALLY_VALIDATED"
                 map_color = "ORANGE"
-
                 recommendation_text = (
                     f"AI මඟින් Brown Spot රෝගය හඳුනාගෙන ඇත. "
                     f"කෙසේ වෙතත්, පවතින පාරිසරික හා පාංශු දත්ත මඟින් "
@@ -623,12 +515,9 @@ def validate_and_recommend_fertilizer():
                     f"වගාවේ රෝග ලක්ෂණ සහ පවතින පාරිසරික තත්ත්වයන් "
                     f"නැවත පරීක්ෂා කරන්න."
                 )
-
             else:
-
                 validation_status = "REJECTED"
                 map_color = "RED"
-
                 recommendation_text = (
                     f"AI මඟින් Brown Spot රෝගය හඳුනාගෙන ඇත. "
                     f"නමුත් පවතින පාරිසරික හා පාංශු දත්ත මඟින් "
@@ -639,7 +528,7 @@ def validate_and_recommend_fertilizer():
                 )
 
         # =========================================================
-        # 6. SHEATH BLIGHT DISEASE
+        # 4. SHEATH BLIGHT DISEASE
         # =========================================================
         
         elif ai_prediction == 'Sheath_Blight':
@@ -648,55 +537,24 @@ def validate_and_recommend_fertilizer():
             supporting_factors = []
 
             if 30.0 <=temperature <= 40.0:
-
                 evidence_score += 1
-
                 supporting_factors.append(
                     f"උෂ්ණත්වය ඉහළ මට්ටමක පවතී ({temperature:.1f}°C)"
                 )
-
             if relative_humidity > 90.0:
-
                 evidence_score += 1
-
                 supporting_factors.append(
                     f"සාපේක්ෂ ආර්ද්‍රතාවය ඉහළ මට්ටමක පවතී "
                     f"({relative_humidity:.1f}%)"
                 )
-
-            # ---------------------------------------------------------
-            # 2. RAINFALL - CONTEXT ONLY
-            # ---------------------------------------------------------
-            # Rainfall is displayed as environmental context.
-            # It is NOT given a validation score because the DOA
-            # Sheath Blight reference does not specify a rainfall
-            # threshold.
-            # ---------------------------------------------------------
-
             if recent_rainfall_7d > 0.0:
-
                 supporting_factors.append(
                     f"පසුගිය දින 7 තුළ සැලකිය යුතු වර්ෂාපතනයක් ලැබී ඇත "
                     f"({recent_rainfall_7d:.1f} mm)"
                 )
-
-            # ---------------------------------------------------------
-            # 3. DROUGHT
-            # ---------------------------------------------------------
-            # Drought is not listed by DOA as a favourable condition
-            # for Sheath Blight.
-            # Therefore, no evidence score is added.
-            # ---------------------------------------------------------
-
-            # ---------------------------------------------------------
-            # 4. FINAL VALIDATION
-            # ---------------------------------------------------------
-
             if evidence_score >= 2:
-
                 validation_status = "VALIDATED"
                 map_color = "GREEN"
-
                 recommendation_text = (
                     f"AI මඟින් Sheath Blight රෝගය හඳුනාගෙන ඇත. "
                     f"පවතින පාරිසරික දත්ත මඟින් අනාවැකියට "
@@ -709,10 +567,8 @@ def validate_and_recommend_fertilizer():
                 )
 
             elif evidence_score == 1:
-
                 validation_status = "PARTIALLY_VALIDATED"
                 map_color = "ORANGE"
-
                 recommendation_text = (
                     f"AI මඟින් Sheath Blight රෝගය හඳුනාගෙන ඇත. "
                     f"නමුත් පවතින පාරිසරික දත්ත මඟින් සීමිත "
@@ -722,12 +578,9 @@ def validate_and_recommend_fertilizer():
                     f"නයිට්‍රජන් පොහොර යෙදූ ප්‍රමාණය "
                     f"සලකා බලන්න."
                 )
-
             else:
-
                 validation_status = "REJECTED"
                 map_color = "RED"
-
                 recommendation_text = (
                     f"AI මඟින් Sheath Blight රෝගය හඳුනාගෙන ඇත. "
                     f"නමුත් පවතින පාරිසරික දත්ත මඟින් Sheath Blight සඳහා "
@@ -739,7 +592,7 @@ def validate_and_recommend_fertilizer():
                 )
             
         # =========================================================
-        # 2. NITROGEN DEFICIENCY
+        # 1. NITROGEN DEFICIENCY
         # =========================================================
         elif ai_prediction == 'Nitrogen_Deficiency':
             evidence_score = 0
@@ -767,7 +620,6 @@ def validate_and_recommend_fertilizer():
                 f"නයිට්‍රජන් පොහොර යෙදීමේදී DOA නිර්දේශිත මාත්‍රාව "
                 f"සහ/හෝ Paddy Leaf Colour Chart (LCC) මත පදනම් වූ කළමනාකරණ ක්‍රම අනුගමනය කරන්න."
                 )
-
             elif evidence_score == 1:
                 validation_status = "PARTIALLY_VALIDATED"
                 map_color = "ORANGE"
@@ -791,7 +643,7 @@ def validate_and_recommend_fertilizer():
                 )
 
         # =========================================================
-        # 3. PHOSPHORUS DEFICIENCY
+        # 2. PHOSPHORUS DEFICIENCY
         # =========================================================
         elif ai_prediction == 'Phosphorus_Deficiency':
 
@@ -799,74 +651,49 @@ def validate_and_recommend_fertilizer():
             supporting_factors = []
     
             if p_val < 5.0:
-
                 evidence_score += 2
-
                 supporting_factors.append(
                     f"පසේ පොස්පරස් මට්ටම අඩුය ({p_val:.1f} mg/kg)"
                 )
-
             elif p_val <= 10.0:
-
                 evidence_score += 0
-
                 supporting_factors.append(
                     f"පසේ පොස්පරස් මට්ටම මධ්‍යම පරාසයේ පවතී "
                     f"({p_val:.1f} mg/kg)"
                 )
-
             else:
-
                 evidence_score -= 2
-
                 supporting_factors.append(
                     f"පසේ පොස්පරස් මට්ටම ඉහළය ({p_val:.1f} mg/kg)"
                 )
-
-            # ---------------------------------------------------------
-            # 2. SECONDARY EVIDENCE: Soil pH & Drought
-            # ---------------------------------------------------------
-            # These are environmental/contextual factors.
-            # They do NOT independently confirm P deficiency.
-            # ---------------------------------------------------------
-
-            # පසේ ප්‍රශස්ත pH පරාසය 5.5 - 6.5 වේ[cite: 3]
+            # ph validation
             if ph < 5.5 or ph > 6.5:
 
                 supporting_factors.append(
                     f"පසේ pH අගය ප්‍රශස්ත සීමාවෙන් පිට පවතී ({ph:.1f})"
                 )
-
+            # drought warning
             if is_drought:
-
                 supporting_factors.append(
                     "වියළි / නියං තත්ත්වයක් පවතී"
                 )
-
-            # ---------------------------------------------------------
-            # 3. FINAL VALIDATION
-            # ---------------------------------------------------------
-
             if p_val < 5.0:
 
                 validation_status = "VALIDATED"
                 map_color = "GREEN"
-
                 recommendation_text = (
                     f"AI මඟින් පොස්පරස් ඌනතාවය හඳුනාගෙන ඇත. "
                     f"පාංශු දත්ත මඟින් අනාවැකියට ශක්තිමත් සහායක් ලැබේ. "
-                    f"පසේ පොස්පරස් මට්ටම {p_val:.1f} mg/kg වන අතර "
+                    f"පසේ පොස්පරස් මට්ටම, {p_val:.1f} mg/kg වන අතර "
                     f"එය DOA critical values අනුව අඩු මට්ටමකි. "
                     f"{', '.join(supporting_factors)}. "
                     f"පාංශු පරීක්ෂණ ප්‍රතිඵල අනුව DOA නිර්දේශිත "
                     f"පොස්පරස් පොහොර කළමනාකරණය අනුගමනය කරන්න."
                 )
-
             elif p_val <= 10.0:
 
                 validation_status = "PARTIALLY_VALIDATED"
                 map_color = "ORANGE"
-
                 recommendation_text = (
                     f"AI මඟින් පොස්පරස් ඌනතාවය හඳුනාගෙන ඇත. "
                     f"නමුත් පසේ පොස්පරස් මට්ටම {p_val:.1f} mg/kg වන අතර "
@@ -876,12 +703,10 @@ def validate_and_recommend_fertilizer():
                     f"{', '.join(supporting_factors)}. "
                     f"අනෙකුත් පාරිසරික සාධක සලකා බලන්න."
                 )
-
             else:
 
                 validation_status = "REJECTED"
                 map_color = "RED"
-
                 recommendation_text = (
                     f"AI මඟින් පොස්පරස් ඌනතාවය හඳුනාගෙන ඇත. "
                     f"නමුත් පසේ පොස්පරස් මට්ටම {p_val:.1f} mg/kg වන අතර "
@@ -891,8 +716,8 @@ def validate_and_recommend_fertilizer():
                     f"පොස්පරස් පොහොර යෙදීමට පෙර පාංශු තත්ත්වය "
                     f"නැවත සලකා බලන්න."
                 )
-       # =========================================================
-        # 4. POTASSIUM DEFICIENCY
+        # =========================================================
+        # 3. POTASSIUM DEFICIENCY
         # =========================================================
         elif ai_prediction == 'Potassium_Deficiency':
             evidence_score = 0
@@ -907,15 +732,12 @@ def validate_and_recommend_fertilizer():
             elif k_val <= 80.0:
                 # 40 - 80 mg/kg = Medium
                 evidence_score += 1
-                supporting_factors.append(f"පසේ පොටෑසියම් මට්ටම මධ්‍යස්ථ/අවදානම් මට්ටමකය ({k_val:.1f} mg/kg)")
+                supporting_factors.append(f"පසේ පොටෑසියම් මට්ටම මධ්‍යස්ථ(අවදානම්) මට්ටමකය ({k_val:.1f} mg/kg)")
             
             else:
-                # > 80 mg/kg = High[cite: 3]
-                evidence_score += 0 # ලකුණු එකතු නොවේ, මන්ද ඌනතාවයක් නොමැති බැවිනි
+                # > 80 mg/kg = High
+                evidence_score += 0 # No additional evidence for high potassium levels
 
-            # ---------------------------------------------------------
-            # 2. SECONDARY EVIDENCE: Heavy Rainfall & Drought
-            # ---------------------------------------------------------
             if recent_rainfall_7d > 150.0:
                 evidence_score += 1
                 supporting_factors.append(f"පසුගිය දින 7 තුළ අධික වර්ෂාපතනයක් ලැබී ඇත ({recent_rainfall_7d:.1f} mm)")
@@ -924,9 +746,6 @@ def validate_and_recommend_fertilizer():
                 evidence_score += 1
                 supporting_factors.append("වියළි / නියං තත්ත්වයක් පවතී")
 
-            # ---------------------------------------------------------
-            # 3. FINAL VALIDATION (Based on total evidence_score)
-            # ---------------------------------------------------------
             if evidence_score >= 2:
                 validation_status = "VALIDATED"
                 map_color = "GREEN"
@@ -943,8 +762,7 @@ def validate_and_recommend_fertilizer():
                     f"AI මඟින් පොටෑසියම් ඌනතාවය හඳුනාගෙන ඇත. "
                     f"Supporting evidence: {', '.join(supporting_factors)}. "
                     f"අනාවැකියට අර්ධ වශයෙන් සහායක් පවතී. පසේ පොටෑසියම් මට්ටම සහ අනෙකුත් පාරිසරික සාධක සලකා බලන්න."
-                )
-            
+                )  
             else:
                 validation_status = "REJECTED"
                 map_color = "RED"
@@ -998,13 +816,13 @@ def add_soil_data():
         new_row = pd.DataFrame([data])
         for col in df.columns:
             if col not in new_row.columns:
-                new_row[col] = 0
+                new_row[col] = 0 # Fill missing columns with 0
         df = pd.concat([df, new_row], ignore_index=True)
         df.to_csv(CSV_PATH, index=False)
         return jsonify({"status": "success", "message": "Soil record added successfully!"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
+  
 @app.route('/api/soil/<int:row_id>', methods=['PUT'])
 def update_soil_data(row_id):
     try:

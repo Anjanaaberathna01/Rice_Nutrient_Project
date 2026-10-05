@@ -11,7 +11,7 @@ import seaborn as sns
 from sklearn.utils import class_weight
 from sklearn.metrics import confusion_matrix, classification_report
 
-# 1.  (Settings)
+# 1. Settings
 IMG_SIZE = (224, 224)
 BATCH_SIZE = 32
 METADATA_CSV = 'database/multi_label_metadata.csv'
