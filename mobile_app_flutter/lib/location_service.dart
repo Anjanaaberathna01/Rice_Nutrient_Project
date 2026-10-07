@@ -5,7 +5,7 @@ class LocationService {
     bool serviceEnabled;
     LocationPermission permission;
 
-    // Location Service එක On ද කියා බැලීම
+    // location sevices is enabled checking
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       return Future.error('Location services are disabled.');
@@ -23,11 +23,11 @@ class LocationService {
       return Future.error('Location permissions are permanently denied.');
     }
 
-    // වත්මන් ස්ථානය ලබා ගැනීම
+    // Get the current position with high accuracy and a distance filter of 10 meters
     return await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 10, // මීටර් 10ක් ඇතුළත වෙනසක් වුණොත් දැනුම් දෙන්න
+        distanceFilter: 10, 
       ),
     );
   }

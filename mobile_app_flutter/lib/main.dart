@@ -1,12 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'dart:typed_data';
-import 'package:gal/gal.dart';
+import 'package:flutter/material.dart'; // Flutter framework for building UI
+import 'package:image_picker/image_picker.dart'; // For picking images from camera or gallery
+import 'dart:io'; // For file operations
+import 'package:http/http.dart' as http; // For making HTTP requests
+import 'dart:convert'; // For encoding and decoding JSON
+import 'dart:typed_data'; // For handling typed data
+import 'package:gal/gal.dart'; // For saving images to the gallery
 import 'package:permission_handler/permission_handler.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:geolocator/geolocator.dart'; //To gets latitude and longitude
 import 'package:image/image.dart' as img;
 import 'map_screen.dart';
 
@@ -21,7 +21,7 @@ class RiceApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.green, useMaterial3: true),
+      theme: ThemeData(primarySwatch: Colors.green, useMaterial3: true), // Define the app's theme & useMaterial3 for UI design
       home: const HomeScreen(),
     );
   }
@@ -35,6 +35,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // Variables to hold the selected image, result text, heatmap data, and location coordinates
   File? _selectedImage;
   String _result = "තවමත් විශ්ලේෂණය කර නැත";
   String? _heatmapBase64;
@@ -42,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
   double? _lat;
   double? _lng;
 
+  // Variables for prediction and category
   String? _currentPredictionId;
   String? _rawPredictionClass;
   String? _rawCategory;
@@ -57,14 +59,14 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchDivisionsFromBackend();
+    _fetchDivisionsFromBackend(); // Fetch DS and GN divisions from the backend when the app starts
   }
 
   //backend eken divisions ganna function eka
   Future<void> _fetchDivisionsFromBackend() async {
     try {
       var response = await http.get(
-        Uri.parse('http://192.168.1.103:5000/api/get_divisions'),
+        Uri.parse('http://172.20.10.8:5000/api/get_divisions'),
       );
 
       if (response.statusCode == 200) {
@@ -73,11 +75,12 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() {
             _dsDivisions = List<String>.from(data['ds_divisions']);
             
+            //
             var rawGnMap = data['gn_divisions'] as Map<String, dynamic>;
             _gnDivisions = rawGnMap.map((key, value) {
               return MapEntry(key, List<String>.from(value));
             });
-
+             // Set default selections if available
             if (_dsDivisions.isNotEmpty) {
               _selectedDS = _dsDivisions.first;
               if (_gnDivisions[_selectedDS!] != null && _gnDivisions[_selectedDS!]!.isNotEmpty) {
@@ -95,6 +98,8 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
   }
+ 
+ // Function to determine the current position of the device
 
   Future<Position> _determinePosition() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -107,22 +112,25 @@ class _HomeScreenState extends State<HomeScreen> {
         return Future.error('Location permissions are denied');
       }
     }
+    // If the user has granted permission, get the current position
     return await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
     );
   }
 
-  Future<void> _pickImage() async {
+// Function to pick an image from the camera or gallery
+  Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
     final XFile? image = await picker.pickImage(
-      source: ImageSource.camera,
+      source: source,
       imageQuality: 100,
     );
 
+    // If an image is selected, update the state with the new image and reset relevant variables
     if (image != null) {
       setState(() {
         _selectedImage = File(image.path);
-        _result = "පින්තූරය ලබාගත්තා. වසම තෝරා Analyze Now ඔබන්න.";
+        _result = "වසම තෝරා විශ්ලේෂණය කරන්න.";
         _heatmapBase64 = null;
         _lat = null;
         _lng = null;
@@ -133,7 +141,44 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // show action sheet to choose between camera and gallery
+  void _showImageSourceActionSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),  
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Wrap(
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: Colors.blueAccent),
+                title: const Text('Capture Leaf (කැමරාවෙන් ගන්න)'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Colors.green),
+                title: const Text('Choose from Gallery (ගැලරියෙන් තෝරන්න)'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  //=========================================================
   // In click Analyze Now (Predict + Soil/Weather Validation)
+  //=========================================================
+
   Future<void> _uploadImageAndValidate() async {
     if (_selectedImage == null) return;
 
@@ -154,6 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
       img.Image? originalImage = img.decodeImage(bytes);
       if (originalImage == null) throw Exception("Could not decode image");
 
+      // Crop the image to the center 40% width
       int cropWidth = (originalImage.width * 0.4).toInt();
       img.Image croppedImage = img.copyCrop(
         originalImage,
@@ -167,12 +213,13 @@ class _HomeScreenState extends State<HomeScreen> {
       final croppedFile = File('${tempDir.path}/temp_crop.jpg');
       await croppedFile.writeAsBytes(img.encodeJpg(croppedImage));
 
+      // Get the current position of the device
       Position position = await _determinePosition();
       _lat = position.latitude;
       _lng = position.longitude;
 
       // 1. Predict API Call
-      var uri = Uri.parse('http://192.168.1.103:5000/predict');
+      var uri = Uri.parse('http://172.20.10.8:5000/predict');
       var request = http.MultipartRequest('POST', uri);
 
       request.files.add(
@@ -194,7 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
         double dis = (decodedData['disease_score'] ?? 0.0) * 100;
         double def = (decodedData['deficiency_score'] ?? 0.0) * 100;
 
-        // 2. AI ප්‍රතිඵලය ලැබුණු වහාම ස්වයංක්‍රීයව Validation API Call එක යැවීම
+        // 2. Validate and Recommend Fertilizer API Call
         if (_currentPredictionId != null) {
           await _fetchSoilAndWeatherPrediction(
             _currentPredictionId!,
@@ -214,18 +261,20 @@ class _HomeScreenState extends State<HomeScreen> {
       } else {
         setState(() {
           _isLoading = false;
-          _result = "දෝෂයකි: ${decodedData['message']}";
+          _result = "දෝෂයකි !";
         });
       }
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _result = "සම්බන්ධතා දෝෂයකි: $e";
+        _result = "සම්බන්ධතා දෝෂයකි !";
       });
     }
   }
 
-  // 💡 /validate_and_recommend_fertilizer වෙත API Call එක යැවීම සහ ප්‍රතිඵලය පෙන්වීම
+  //=================================================================================
+  // validate_and_recommend_fertilizer API Call
+  //=================================================================================
   Future<void> _fetchSoilAndWeatherPrediction(
     String predId,
     String ds,
@@ -240,7 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ) async {
     try {
       var uri = Uri.parse(
-        'http://192.168.1.103:5000/validate_and_recommend_fertilizer',
+        'http://172.20.10.8:5000/validate_and_recommend_fertilizer',
       );
 
       var response = await http.post(
@@ -274,25 +323,33 @@ class _HomeScreenState extends State<HomeScreen> {
               "පස් හා කාලගුණ විද්‍යාත්මක පුරෝකථනය:\n"
               "$recommendation";
         });
-      } else {
+      } 
+      // server error handling
+      else {
         setState(() {
           _isLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Server Error : ${response.statusCode}")),
+          SnackBar(content: Text("සේවාදායකයේ දෝෂයකි. කරුණාකර නැවත උත්සාහ කරන්න.")),
         );
       }
-    } catch (e) {
+    } 
+    // connection error handling
+    catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Connection Error : $e")),
+          SnackBar(content: Text("අන්තර්ජාල සම්බන්ධතාවය පරීක්ෂා කර නැවත උත්සාහ කරන්න.")),
         );
       }
     }
   }
+
+  //=================================================================================
+  // Download the heatmap image to the device's gallery
+  //=================================================================================
 
   Future<void> _downloadHeatmap() async {
     if (_heatmapBase64 == null) return;
@@ -309,26 +366,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Heatmap Downloaded Successfully! ✅'), backgroundColor: Colors.green),
+            const SnackBar(content: Text('තාප සිතියම සාර්ථකව ගැලරියට සුරකින ලදී.'), backgroundColor: Colors.green),
           );
         }
       } catch (e) {
         print("Error saving image: $e");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to save image. ❌'), backgroundColor: Colors.red),
+            const SnackBar(content: Text('ඡායාරූපය සුරැකීමට නොහැකි විය.'), backgroundColor: Colors.red),
           );
         }
       }
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Storage Permission Denied! ⚠️')),
+          const SnackBar(content: Text('ගැලරියට පිවිසීමට අවසර ලබා දී නොමැත!')),
         );
       }
     }
   }
 
+  //=================================================================================
+  // Show the heatmap dialog with the image and download option
+  //=================================================================================
   void _showHeatmapDialog() {
     showDialog(
       context: context,
@@ -412,7 +472,7 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // 💡 වසම් තෝරාගැනීමේ කොටස (Autocomplete TextFields)
+            // DS and GN Division Selection Card
             Card(
               elevation: 3,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -546,9 +606,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 : Column(
                     children: [
                       ElevatedButton.icon(
-                        onPressed: _pickImage,
-                        icon: const Icon(Icons.camera_alt),
-                        label: const Text("Capture Leaf"),
+                        onPressed: () => _showImageSourceActionSheet(context),
+                        icon: const Icon(Icons.add_a_photo),
+                        label: const Text("ඡායාරූපයක් එක් කරන්න"),
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size(260, 50),
                           backgroundColor: Colors.blueAccent,
@@ -563,7 +623,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ElevatedButton.icon(
                           onPressed: _uploadImageAndValidate,
                           icon: const Icon(Icons.analytics_outlined),
-                          label: const Text("Analyze Now"),
+                          label: const Text("විශ්ලේෂණය කරන්න"),
                           style: ElevatedButton.styleFrom(
                             minimumSize: const Size(260, 50),
                             backgroundColor: Colors.green[600],
@@ -578,7 +638,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ElevatedButton.icon(
                           onPressed: _showHeatmapDialog,
                           icon: const Icon(Icons.wb_sunny_outlined),
-                          label: const Text("View Heatmap Again"),
+                          label: const Text("අවධානය යොමුකළ ස්ථාන නැවත බලන්න"),
                           style: ElevatedButton.styleFrom(
                             minimumSize: const Size(260, 50),
                             backgroundColor: Colors.teal[600],
@@ -599,7 +659,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           );
                         },
                         icon: const Icon(Icons.map_outlined),
-                        label: const Text("View Analysis Map"),
+                        label: const Text("විශ්ලේෂණය කෙරූ ස්ථානයන් සිතියමෙන් බලන්න"),
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size(260, 50),
                           backgroundColor: Colors.orange[800],

@@ -21,7 +21,7 @@ function App() {
 
   const [editingId, setEditingId] = useState(null);
 
-  const API_URL = "http://192.168.1.103:5000";
+  const API_URL = "http://172.20.10.8:5000";
 
   useEffect(() => {
     fetchLocations();
@@ -691,7 +691,6 @@ function App() {
         <div>
           <h1>Admin Panel</h1>
           <p>
-            Real-time field triangulation and soil data management
           </p>
         </div>
       </header>

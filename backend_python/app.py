@@ -418,7 +418,7 @@ def validate_and_recommend_fertilizer():
                 validation_status = "VALIDATED"
                 map_color = "GREEN"
                 recommendation_text = (
-                    f"AI මඟින් Rice Blast රෝගය හඳුනාගෙන ඇත. "
+                    f"AI මඟින් කොළ පාළුව රෝගය (Rice Blast) හඳුනාගෙන ඇත. "
                     f"පවතින පාරිසරික දත්ත අනුව රෝගයට "
                     f"හිතකර තත්ත්වයන් පවතී: "
                     f"{', '.join(supporting_factors)}. "
@@ -430,9 +430,9 @@ def validate_and_recommend_fertilizer():
                 validation_status = "PARTIALLY_VALIDATED"
                 map_color = "ORANGE"
                 recommendation_text = (
-                    f"AI මඟින් Rice Blast රෝගය හඳුනාගෙන ඇත. "
+                    f"AI මඟින් කොළ පාළුව රෝගය (Rice Blast) හඳුනාගෙන ඇත. "
                     f"නමුත් පවතින පාරිසරික දත්ත මඟින් "
-                    f"සීමිත supporting evidence පමණක් පවතී: "
+                    f"සීමිත තහවුරු කරන සාධක පමණක් පවතී: "
                     f"{', '.join(supporting_factors)}. "
                     f"එබැවින් අනාවැකිය සම්පූර්ණයෙන් "
                     f"තහවුරු කළ නොහැක. "
@@ -442,10 +442,10 @@ def validate_and_recommend_fertilizer():
                 validation_status = "REJECTED"
                 map_color = "RED"
                 recommendation_text = (
-                    f"AI මඟින් Rice Blast රෝගය හඳුනාගෙන ඇත. "
+                    f"AI මඟින් කොළ පාළුව රෝගය (Rice Blast) හඳුනාගෙන ඇත. "
                     f"නමුත් පවතින පාරිසරික දත්ත මඟින් "
-                    f"Rice Blast සඳහා ප්‍රමාණවත් "
-                    f"supporting evidence හමු වී නොමැත. "
+                    f"කොළ පාළුව සඳහා ප්‍රමාණවත් "
+                    f"තහවුරු කරන සාධක හමු වී නොමැත. "
                     f"{', '.join(supporting_factors)}. "
                     f"එබැවින් රෝග ලක්ෂණ නැවත පරීක්ෂා කරන්න. "
                     f"{nitrogen_warning}"
@@ -461,7 +461,7 @@ def validate_and_recommend_fertilizer():
             if 16.0 <= temperature <= 36.0:
                 evidence_score += 1
                 supporting_factors.append(
-                    f"පවතින උෂ්ණත්වය Brown Spot සඳහා හිතකර පරාසයේ පවතී "
+                    f"පවතින උෂ්ණත්වය දුඹුරු පුල්ලි රෝගය සඳහා හිතකර පරාසයේ පවතී "
                     f"({temperature:.1f}°C)"
                 )
             # Humidity ('relative_humidity' variable is obtained from the weather API)
@@ -495,7 +495,7 @@ def validate_and_recommend_fertilizer():
                 validation_status = "VALIDATED"
                 map_color = "GREEN"
                 recommendation_text = (
-                    f"AI මඟින් Brown Spot රෝගය හඳුනාගෙන ඇත. "
+                    f"AI මඟින් දුඹුරු පුල්ලි රෝගය (Brown Spot) හඳුනාගෙන ඇත. "
                     f"පවතින පාරිසරික හා පාංශු දත්ත මඟින් අනාවැකියට "
                     f"ශක්තිමත් සහායක් ලැබේ: "
                     f"{', '.join(supporting_factors)}. "
@@ -507,9 +507,9 @@ def validate_and_recommend_fertilizer():
                 validation_status = "PARTIALLY_VALIDATED"
                 map_color = "ORANGE"
                 recommendation_text = (
-                    f"AI මඟින් Brown Spot රෝගය හඳුනාගෙන ඇත. "
+                    f"AI මඟින් දුඹුරු පුල්ලි රෝගය (Brown Spot) හඳුනාගෙන ඇත. "
                     f"කෙසේ වෙතත්, පවතින පාරිසරික හා පාංශු දත්ත මඟින් "
-                    f"සීමිත supporting evidence පමණක් පවතී: "
+                    f"සීමිත තහවුරු කරන සාධක පමණක් පවතී: "
                     f"{', '.join(supporting_factors)}. "
                     f"එබැවින් අනාවැකිය සම්පූර්ණයෙන් තහවුරු කළ නොහැක. "
                     f"වගාවේ රෝග ලක්ෂණ සහ පවතින පාරිසරික තත්ත්වයන් "
@@ -519,9 +519,9 @@ def validate_and_recommend_fertilizer():
                 validation_status = "REJECTED"
                 map_color = "RED"
                 recommendation_text = (
-                    f"AI මඟින් Brown Spot රෝගය හඳුනාගෙන ඇත. "
+                    f"AI මඟින් දුඹුරු පුල්ලි රෝගය (Brown Spot) හඳුනාගෙන ඇත. "
                     f"නමුත් පවතින පාරිසරික හා පාංශු දත්ත මඟින් "
-                    f"Brown Spot සඳහා ප්‍රමාණවත් supporting evidence "
+                    f"Brown Spot සඳහා ප්‍රමාණවත් තහවුරු කරන සාධක "
                     f"හමු වී නොමැත. "
                     f"එබැවින් රෝග ලක්ෂණ සහ පාරිසරික තත්ත්වයන් "
                     f"නැවත පරීක්ෂා කිරීම නිර්දේශ කෙරේ."
