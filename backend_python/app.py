@@ -9,7 +9,7 @@ import numpy as np # numerical operations
 import io
 import base64
 import mysql.connector # database connection
-import requests # weather api call සඳහා
+import requests # weather api call 
 from datetime import datetime, timedelta
 
 app = Flask(__name__)

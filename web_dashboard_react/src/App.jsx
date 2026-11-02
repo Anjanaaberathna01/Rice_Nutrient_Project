@@ -21,7 +21,7 @@ function App() {
 
   const [editingId, setEditingId] = useState(null);
 
-  const API_URL = "http://172.20.10.8:5000";
+  const API_URL = "http://10.16.142.130:5000";
 
   useEffect(() => {
     fetchLocations();
