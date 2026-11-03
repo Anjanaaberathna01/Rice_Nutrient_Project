@@ -453,7 +453,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Rice Nutrient & Disease Analyzer"),
+        title: const Text("RiceCare Ai"),
         backgroundColor: Colors.green[700],
         foregroundColor: Colors.white,
         actions: [
